@@ -1,0 +1,4614 @@
+{
+ "openapi": "3.1.0",
+ "info": {
+  "title": "AssignmentHand API",
+  "description": "Handwriting profiles, assignment extraction, AI answers and handwritten PDF rendering.",
+  "version": "1.0.0"
+ },
+ "paths": {
+  "/api/v1/health": {
+   "get": {
+    "tags": [
+     "system"
+    ],
+    "summary": "Health",
+    "description": "Liveness: the process is up.",
+    "operationId": "health_api_v1_health_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/health/ready": {
+   "get": {
+    "tags": [
+     "system"
+    ],
+    "summary": "Ready",
+    "description": "Readiness: database and storage reachable; reports worker heartbeat and integrations.",
+    "operationId": "ready_api_v1_health_ready_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/config/public": {
+   "get": {
+    "tags": [
+     "system"
+    ],
+    "summary": "Public Config",
+    "operationId": "public_config_api_v1_config_public_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/jobs/{jid}": {
+   "get": {
+    "tags": [
+     "system"
+    ],
+    "summary": "Job",
+    "operationId": "job_api_v1_jobs__jid__get",
+    "parameters": [
+     {
+      "name": "jid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Jid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/JobOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/jobs": {
+   "get": {
+    "tags": [
+     "system"
+    ],
+    "summary": "Jobs",
+    "operationId": "jobs_api_v1_jobs_get",
+    "parameters": [
+     {
+      "name": "assignment_id",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Assignment Id"
+      }
+     },
+     {
+      "name": "profile_id",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Profile Id"
+      }
+     },
+     {
+      "name": "active",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "boolean",
+       "default": false,
+       "title": "Active"
+      }
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 100,
+       "minimum": 1,
+       "default": 20,
+       "title": "Limit"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/JobOut"
+         },
+         "title": "Response Jobs Api V1 Jobs Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/jobs/{jid}/retry": {
+   "post": {
+    "tags": [
+     "system"
+    ],
+    "summary": "Retry Job",
+    "operationId": "retry_job_api_v1_jobs__jid__retry_post",
+    "parameters": [
+     {
+      "name": "jid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Jid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/JobOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/dashboard": {
+   "get": {
+    "tags": [
+     "system"
+    ],
+    "summary": "Dashboard",
+    "operationId": "dashboard_api_v1_dashboard_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/auth/register": {
+   "post": {
+    "tags": [
+     "auth"
+    ],
+    "summary": "Register",
+    "operationId": "register_api_v1_auth_register_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/Credentials"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/TokenOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/auth/login": {
+   "post": {
+    "tags": [
+     "auth"
+    ],
+    "summary": "Login",
+    "operationId": "login_api_v1_auth_login_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/Credentials"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/TokenOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/auth/logout": {
+   "post": {
+    "tags": [
+     "auth"
+    ],
+    "summary": "Logout",
+    "operationId": "logout_api_v1_auth_logout_post",
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     }
+    }
+   }
+  },
+  "/api/v1/auth/me": {
+   "get": {
+    "tags": [
+     "auth"
+    ],
+    "summary": "Me",
+    "operationId": "me_api_v1_auth_me_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UserOut"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "tags": [
+     "auth"
+    ],
+    "summary": "Delete Me",
+    "description": "Delete the account and every file, profile, assignment and export it owns.",
+    "operationId": "delete_me_api_v1_auth_me_delete",
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     }
+    }
+   }
+  },
+  "/api/v1/profiles/template.pdf": {
+   "get": {
+    "tags": [
+     "handwriting profiles"
+    ],
+    "summary": "Template Pdf",
+    "description": "Printable sheet to fill in by hand (one character per box).",
+    "operationId": "template_pdf_api_v1_profiles_template_pdf_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response"
+     }
+    }
+   }
+  },
+  "/api/v1/profiles": {
+   "get": {
+    "tags": [
+     "handwriting profiles"
+    ],
+    "summary": "List Profiles",
+    "operationId": "list_profiles_api_v1_profiles_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/ProfileOut"
+         },
+         "type": "array",
+         "title": "Response List Profiles Api V1 Profiles Get"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "handwriting profiles"
+    ],
+    "summary": "Create Profile",
+    "operationId": "create_profile_api_v1_profiles_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ProfileCreate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ProfileOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/profiles/{pid}": {
+   "get": {
+    "tags": [
+     "handwriting profiles"
+    ],
+    "summary": "Get Profile",
+    "operationId": "get_profile_api_v1_profiles__pid__get",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ProfileOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "patch": {
+    "tags": [
+     "handwriting profiles"
+    ],
+    "summary": "Update Profile",
+    "operationId": "update_profile_api_v1_profiles__pid__patch",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ProfileUpdate"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ProfileOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "tags": [
+     "handwriting profiles"
+    ],
+    "summary": "Remove Profile",
+    "description": "Delete the profile, its source samples and all derived glyph data.",
+    "operationId": "remove_profile_api_v1_profiles__pid__delete",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/profiles/{pid}/samples": {
+   "post": {
+    "tags": [
+     "handwriting profiles"
+    ],
+    "summary": "Upload Sample",
+    "operationId": "upload_sample_api_v1_profiles__pid__samples_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_upload_sample_api_v1_profiles__pid__samples_post"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SampleOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/profiles/{pid}/samples/{sid}": {
+   "patch": {
+    "tags": [
+     "handwriting profiles"
+    ],
+    "summary": "Update Sample",
+    "operationId": "update_sample_api_v1_profiles__pid__samples__sid__patch",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     },
+     {
+      "name": "sid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Sid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SampleUpdate"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SampleOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "tags": [
+     "handwriting profiles"
+    ],
+    "summary": "Delete Sample",
+    "operationId": "delete_sample_api_v1_profiles__pid__samples__sid__delete",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     },
+     {
+      "name": "sid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Sid"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/profiles/{pid}/samples/{sid}/image": {
+   "get": {
+    "tags": [
+     "handwriting profiles"
+    ],
+    "summary": "Sample Image",
+    "operationId": "sample_image_api_v1_profiles__pid__samples__sid__image_get",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     },
+     {
+      "name": "sid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Sid"
+      }
+     },
+     {
+      "name": "variant",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "pattern": "^(original|corrected|processed)$",
+       "default": "original",
+       "title": "Variant"
+      }
+     },
+     {
+      "name": "max_side",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 4000,
+       "minimum": 200,
+       "default": 1600,
+       "title": "Max Side"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/profiles/{pid}/samples/{sid}/transcribe": {
+   "post": {
+    "tags": [
+     "handwriting profiles"
+    ],
+    "summary": "Transcribe Sample",
+    "description": "Draft a transcript of a free-form sample with the configured AI model (the user should check it).",
+    "operationId": "transcribe_sample_api_v1_profiles__pid__samples__sid__transcribe_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     },
+     {
+      "name": "sid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Sid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SampleOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/profiles/{pid}/process": {
+   "post": {
+    "tags": [
+     "handwriting profiles"
+    ],
+    "summary": "Process",
+    "description": "Analyse all samples and (re)build the glyph library in the background.",
+    "operationId": "process_api_v1_profiles__pid__process_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "responses": {
+     "202": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/JobOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/profiles/{pid}/preview": {
+   "post": {
+    "tags": [
+     "handwriting profiles"
+    ],
+    "summary": "Preview",
+    "description": "Render arbitrary text in this handwriting (PNG). Warnings are returned in X-Render-Warnings.",
+    "operationId": "preview_api_v1_profiles__pid__preview_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PreviewIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/profiles/{pid}/glyphs.png": {
+   "get": {
+    "tags": [
+     "handwriting profiles"
+    ],
+    "summary": "Glyph Sheet",
+    "operationId": "glyph_sheet_api_v1_profiles__pid__glyphs_png_get",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assignments": {
+   "get": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "List Assignments",
+    "operationId": "list_assignments_api_v1_assignments_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/AssignmentOut"
+         },
+         "type": "array",
+         "title": "Response List Assignments Api V1 Assignments Get"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Create Assignment",
+    "description": "Upload an assignment PDF; question extraction starts in the background.",
+    "operationId": "create_assignment_api_v1_assignments_post",
+    "requestBody": {
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_create_assignment_api_v1_assignments_post"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AssignmentDetail"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assignments/{aid}": {
+   "get": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Get Assignment",
+    "operationId": "get_assignment_api_v1_assignments__aid__get",
+    "parameters": [
+     {
+      "name": "aid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Aid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AssignmentDetail"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "patch": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Update Assignment",
+    "operationId": "update_assignment_api_v1_assignments__aid__patch",
+    "parameters": [
+     {
+      "name": "aid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Aid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AssignmentUpdate"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AssignmentDetail"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Remove Assignment",
+    "description": "Delete the assignment, its uploaded PDFs, answers and every export.",
+    "operationId": "remove_assignment_api_v1_assignments__aid__delete",
+    "parameters": [
+     {
+      "name": "aid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Aid"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assignments/{aid}/references": {
+   "post": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Add Reference",
+    "description": "Attach reference material (PDF). Its text is used to ground answers and citations.",
+    "operationId": "add_reference_api_v1_assignments__aid__references_post",
+    "parameters": [
+     {
+      "name": "aid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Aid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_add_reference_api_v1_assignments__aid__references_post"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DocumentOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assignments/{aid}/documents/{did}": {
+   "delete": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Remove Document",
+    "operationId": "remove_document_api_v1_assignments__aid__documents__did__delete",
+    "parameters": [
+     {
+      "name": "aid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Aid"
+      }
+     },
+     {
+      "name": "did",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Did"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assignments/{aid}/documents/{did}/pages/{n}.png": {
+   "get": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Document Page",
+    "operationId": "document_page_api_v1_assignments__aid__documents__did__pages__n__png_get",
+    "parameters": [
+     {
+      "name": "aid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Aid"
+      }
+     },
+     {
+      "name": "did",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Did"
+      }
+     },
+     {
+      "name": "n",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "title": "N"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assignments/{aid}/documents/{did}/source.pdf": {
+   "get": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Document Pdf",
+    "operationId": "document_pdf_api_v1_assignments__aid__documents__did__source_pdf_get",
+    "parameters": [
+     {
+      "name": "aid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Aid"
+      }
+     },
+     {
+      "name": "did",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Did"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assignments/{aid}/figures": {
+   "get": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Figure",
+    "operationId": "figure_api_v1_assignments__aid__figures_get",
+    "parameters": [
+     {
+      "name": "aid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Aid"
+      }
+     },
+     {
+      "name": "key",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "maxLength": 512,
+       "title": "Key"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assignments/{aid}/extract": {
+   "post": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Re Extract",
+    "description": "Re-run extraction. Questions you added manually are kept; extracted ones are replaced.",
+    "operationId": "re_extract_api_v1_assignments__aid__extract_post",
+    "parameters": [
+     {
+      "name": "aid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Aid"
+      }
+     }
+    ],
+    "responses": {
+     "202": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/JobOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assignments/{aid}/questions": {
+   "get": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "List Questions",
+    "operationId": "list_questions_api_v1_assignments__aid__questions_get",
+    "parameters": [
+     {
+      "name": "aid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Aid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/QuestionOut"
+         },
+         "title": "Response List Questions Api V1 Assignments  Aid  Questions Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Add Question",
+    "operationId": "add_question_api_v1_assignments__aid__questions_post",
+    "parameters": [
+     {
+      "name": "aid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Aid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/QuestionIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/QuestionOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/questions/{qid}": {
+   "patch": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Update Question",
+    "operationId": "update_question_api_v1_questions__qid__patch",
+    "parameters": [
+     {
+      "name": "qid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Qid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/QuestionUpdate"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/QuestionOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Delete Question",
+    "operationId": "delete_question_api_v1_questions__qid__delete",
+    "parameters": [
+     {
+      "name": "qid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Qid"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assignments/{aid}/questions/reorder": {
+   "post": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Reorder",
+    "operationId": "reorder_api_v1_assignments__aid__questions_reorder_post",
+    "parameters": [
+     {
+      "name": "aid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Aid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ReorderIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/QuestionOut"
+         },
+         "title": "Response Reorder Api V1 Assignments  Aid  Questions Reorder Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assignments/{aid}/questions/merge": {
+   "post": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Merge",
+    "description": "Merge questions into the first one (in document order). Existing answers of the others are dropped.",
+    "operationId": "merge_api_v1_assignments__aid__questions_merge_post",
+    "parameters": [
+     {
+      "name": "aid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Aid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/MergeIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/QuestionOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/questions/{qid}/split": {
+   "post": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Split",
+    "operationId": "split_api_v1_questions__qid__split_post",
+    "parameters": [
+     {
+      "name": "qid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Qid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SplitIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/QuestionOut"
+         },
+         "title": "Response Split Api V1 Questions  Qid  Split Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assignments/{aid}/confirm-extraction": {
+   "post": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Confirm Extraction",
+    "operationId": "confirm_extraction_api_v1_assignments__aid__confirm_extraction_post",
+    "parameters": [
+     {
+      "name": "aid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Aid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AssignmentDetail"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assignments/{aid}/estimate": {
+   "get": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Estimate",
+    "description": "Approximate token use and cost for generating all included answers.",
+    "operationId": "estimate_api_v1_assignments__aid__estimate_get",
+    "parameters": [
+     {
+      "name": "aid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Aid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assignments/{aid}/generate": {
+   "post": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Generate",
+    "operationId": "generate_api_v1_assignments__aid__generate_post",
+    "parameters": [
+     {
+      "name": "aid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Aid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/GenerateIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "202": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/JobOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/questions/{qid}/answer": {
+   "put": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Write Answer",
+    "description": "Create or edit an answer by hand (autosave target). Editing an approved answer un-approves it.",
+    "operationId": "write_answer_api_v1_questions__qid__answer_put",
+    "parameters": [
+     {
+      "name": "qid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Qid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AnswerUpdate"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AnswerOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/answers/{ans_id}/approve": {
+   "post": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Approve",
+    "operationId": "approve_api_v1_answers__ans_id__approve_post",
+    "parameters": [
+     {
+      "name": "ans_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Ans Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AnswerOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/answers/{ans_id}/unapprove": {
+   "post": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Unapprove",
+    "operationId": "unapprove_api_v1_answers__ans_id__unapprove_post",
+    "parameters": [
+     {
+      "name": "ans_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Ans Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AnswerOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/answers/{ans_id}/restore/{revision}": {
+   "post": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Restore",
+    "description": "Bring back an earlier version of an answer (the current one is kept in history).",
+    "operationId": "restore_api_v1_answers__ans_id__restore__revision__post",
+    "parameters": [
+     {
+      "name": "ans_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Ans Id"
+      }
+     },
+     {
+      "name": "revision",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "title": "Revision"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AnswerOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assignments/{aid}/answers/approve-all": {
+   "post": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Approve All",
+    "operationId": "approve_all_api_v1_assignments__aid__answers_approve_all_post",
+    "parameters": [
+     {
+      "name": "aid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Aid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/AnswerOut"
+         },
+         "title": "Response Approve All Api V1 Assignments  Aid  Answers Approve All Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assignments/{aid}/render-config": {
+   "get": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Get Render Config",
+    "operationId": "get_render_config_api_v1_assignments__aid__render_config_get",
+    "parameters": [
+     {
+      "name": "aid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Aid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "put": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Put Render Config",
+    "operationId": "put_render_config_api_v1_assignments__aid__render_config_put",
+    "parameters": [
+     {
+      "name": "aid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Aid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/RenderSettings"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assignments/{aid}/render": {
+   "post": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Render",
+    "description": "Render a preview (any answers) or the final PDF (all included answers must be approved).",
+    "operationId": "render_api_v1_assignments__aid__render_post",
+    "parameters": [
+     {
+      "name": "aid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Aid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/RenderIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "202": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/JobOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assignments/{aid}/export": {
+   "post": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Export",
+    "operationId": "export_api_v1_assignments__aid__export_post",
+    "parameters": [
+     {
+      "name": "aid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Aid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ExportIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "202": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/JobOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/rendered/{rid}": {
+   "get": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Rendered Info",
+    "operationId": "rendered_info_api_v1_rendered__rid__get",
+    "parameters": [
+     {
+      "name": "rid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Rid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/RenderedOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Delete Rendered",
+    "operationId": "delete_rendered_api_v1_rendered__rid__delete",
+    "parameters": [
+     {
+      "name": "rid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Rid"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/rendered/{rid}/pages/{n}.png": {
+   "get": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Rendered Page",
+    "operationId": "rendered_page_api_v1_rendered__rid__pages__n__png_get",
+    "parameters": [
+     {
+      "name": "rid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Rid"
+      }
+     },
+     {
+      "name": "n",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "title": "N"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/rendered/{rid}/download": {
+   "get": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Download",
+    "operationId": "download_api_v1_rendered__rid__download_get",
+    "parameters": [
+     {
+      "name": "rid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Rid"
+      }
+     },
+     {
+      "name": "inline",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "boolean",
+       "default": false,
+       "title": "Inline"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/exports": {
+   "get": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Export History",
+    "operationId": "export_history_api_v1_exports_get",
+    "parameters": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 200,
+       "minimum": 1,
+       "default": 30,
+       "title": "Limit"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/RenderedOut"
+         },
+         "title": "Response Export History Api V1 Exports Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  }
+ },
+ "components": {
+  "schemas": {
+   "AnswerOut": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "question_id": {
+      "type": "string",
+      "title": "Question Id"
+     },
+     "content": {
+      "type": "string",
+      "title": "Content"
+     },
+     "status": {
+      "type": "string",
+      "title": "Status"
+     },
+     "word_count": {
+      "type": "integer",
+      "title": "Word Count"
+     },
+     "flags": {
+      "items": {},
+      "type": "array",
+      "title": "Flags"
+     },
+     "revision": {
+      "type": "integer",
+      "title": "Revision"
+     },
+     "history": {
+      "items": {},
+      "type": "array",
+      "title": "History"
+     },
+     "model": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Model"
+     },
+     "input_tokens": {
+      "type": "integer",
+      "title": "Input Tokens"
+     },
+     "output_tokens": {
+      "type": "integer",
+      "title": "Output Tokens"
+     },
+     "cost_usd": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Cost Usd"
+     },
+     "error": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Error"
+     },
+     "approved_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Approved At"
+     },
+     "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Updated At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "question_id",
+     "content",
+     "status",
+     "word_count",
+     "flags",
+     "revision",
+     "history",
+     "model",
+     "input_tokens",
+     "output_tokens",
+     "cost_usd",
+     "error",
+     "approved_at",
+     "updated_at"
+    ],
+    "title": "AnswerOut"
+   },
+   "AnswerPrefsIn": {
+    "properties": {
+     "academic_level": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 80
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Academic Level"
+     },
+     "detail": {
+      "anyOf": [
+       {
+        "type": "string",
+        "pattern": "^(concise|moderate|detailed)$"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Detail"
+     },
+     "language": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 40
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Language"
+     },
+     "target_words": {
+      "anyOf": [
+       {
+        "type": "integer",
+        "maximum": 3000.0,
+        "minimum": 20.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Target Words"
+     },
+     "technical_depth": {
+      "anyOf": [
+       {
+        "type": "string",
+        "pattern": "^(introductory|standard|advanced)$"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Technical Depth"
+     },
+     "citations": {
+      "anyOf": [
+       {
+        "type": "string",
+        "pattern": "^(none|if_available|required)$"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Citations"
+     },
+     "show_working": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Show Working"
+     },
+     "tone": {
+      "anyOf": [
+       {
+        "type": "string",
+        "pattern": "^(formal|neutral|conversational)$"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Tone"
+     },
+     "extra_instructions": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 1000
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Extra Instructions"
+     }
+    },
+    "type": "object",
+    "title": "AnswerPrefsIn"
+   },
+   "AnswerUpdate": {
+    "properties": {
+     "content": {
+      "type": "string",
+      "maxLength": 60000,
+      "title": "Content"
+     },
+     "expected_revision": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Revision"
+     }
+    },
+    "type": "object",
+    "required": [
+     "content"
+    ],
+    "title": "AnswerUpdate"
+   },
+   "AssignmentDetail": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "title": {
+      "type": "string",
+      "title": "Title"
+     },
+     "subject": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Subject"
+     },
+     "instructions": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Instructions"
+     },
+     "status": {
+      "type": "string",
+      "title": "Status"
+     },
+     "preferences": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Preferences"
+     },
+     "profile_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Profile Id"
+     },
+     "extraction_confirmed": {
+      "type": "boolean",
+      "title": "Extraction Confirmed"
+     },
+     "error": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Error"
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Created At"
+     },
+     "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Updated At"
+     },
+     "documents": {
+      "items": {
+       "$ref": "#/components/schemas/DocumentOut"
+      },
+      "type": "array",
+      "title": "Documents",
+      "default": []
+     },
+     "questions": {
+      "items": {
+       "$ref": "#/components/schemas/QuestionOut"
+      },
+      "type": "array",
+      "title": "Questions",
+      "default": []
+     },
+     "rendered": {
+      "items": {
+       "$ref": "#/components/schemas/RenderedOut"
+      },
+      "type": "array",
+      "title": "Rendered",
+      "default": []
+     },
+     "render_settings": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Render Settings",
+      "default": {}
+     },
+     "active_jobs": {
+      "items": {
+       "$ref": "#/components/schemas/JobOut"
+      },
+      "type": "array",
+      "title": "Active Jobs",
+      "default": []
+     },
+     "stats": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Stats",
+      "default": {}
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "title",
+     "subject",
+     "instructions",
+     "status",
+     "preferences",
+     "profile_id",
+     "extraction_confirmed",
+     "error",
+     "created_at",
+     "updated_at"
+    ],
+    "title": "AssignmentDetail"
+   },
+   "AssignmentOut": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "title": {
+      "type": "string",
+      "title": "Title"
+     },
+     "subject": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Subject"
+     },
+     "instructions": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Instructions"
+     },
+     "status": {
+      "type": "string",
+      "title": "Status"
+     },
+     "preferences": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Preferences"
+     },
+     "profile_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Profile Id"
+     },
+     "extraction_confirmed": {
+      "type": "boolean",
+      "title": "Extraction Confirmed"
+     },
+     "error": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Error"
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Created At"
+     },
+     "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Updated At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "title",
+     "subject",
+     "instructions",
+     "status",
+     "preferences",
+     "profile_id",
+     "extraction_confirmed",
+     "error",
+     "created_at",
+     "updated_at"
+    ],
+    "title": "AssignmentOut"
+   },
+   "AssignmentUpdate": {
+    "properties": {
+     "title": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 255,
+        "minLength": 1
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Title"
+     },
+     "subject": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 120
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Subject"
+     },
+     "instructions": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 10000
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Instructions"
+     },
+     "preferences": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/AnswerPrefsIn"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "profile_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Profile Id"
+     }
+    },
+    "type": "object",
+    "title": "AssignmentUpdate"
+   },
+   "Body_add_reference_api_v1_assignments__aid__references_post": {
+    "properties": {
+     "file": {
+      "type": "string",
+      "contentMediaType": "application/octet-stream",
+      "title": "File"
+     }
+    },
+    "type": "object",
+    "required": [
+     "file"
+    ],
+    "title": "Body_add_reference_api_v1_assignments__aid__references_post"
+   },
+   "Body_create_assignment_api_v1_assignments_post": {
+    "properties": {
+     "file": {
+      "type": "string",
+      "contentMediaType": "application/octet-stream",
+      "title": "File",
+      "description": "Assignment PDF"
+     },
+     "title": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 255
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Title"
+     },
+     "subject": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 120
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Subject"
+     }
+    },
+    "type": "object",
+    "required": [
+     "file"
+    ],
+    "title": "Body_create_assignment_api_v1_assignments_post"
+   },
+   "Body_upload_sample_api_v1_profiles__pid__samples_post": {
+    "properties": {
+     "file": {
+      "type": "string",
+      "contentMediaType": "application/octet-stream",
+      "title": "File"
+     },
+     "kind": {
+      "type": "string",
+      "pattern": "^(template|freeform)$",
+      "title": "Kind",
+      "default": "template"
+     },
+     "transcript": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 20000
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Transcript"
+     },
+     "template_page": {
+      "anyOf": [
+       {
+        "type": "integer",
+        "maximum": 20.0,
+        "minimum": 0.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Template Page"
+     }
+    },
+    "type": "object",
+    "required": [
+     "file"
+    ],
+    "title": "Body_upload_sample_api_v1_profiles__pid__samples_post"
+   },
+   "Credentials": {
+    "properties": {
+     "email": {
+      "type": "string",
+      "format": "email",
+      "title": "Email"
+     },
+     "password": {
+      "type": "string",
+      "maxLength": 200,
+      "minLength": 8,
+      "title": "Password"
+     },
+     "display_name": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 120
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Display Name"
+     }
+    },
+    "type": "object",
+    "required": [
+     "email",
+     "password"
+    ],
+    "title": "Credentials"
+   },
+   "DocumentOut": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "role": {
+      "type": "string",
+      "title": "Role"
+     },
+     "original_filename": {
+      "type": "string",
+      "title": "Original Filename"
+     },
+     "page_count": {
+      "type": "integer",
+      "title": "Page Count"
+     },
+     "pages": {
+      "items": {},
+      "type": "array",
+      "title": "Pages"
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Created At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "role",
+     "original_filename",
+     "page_count",
+     "pages",
+     "created_at"
+    ],
+    "title": "DocumentOut"
+   },
+   "ExportIn": {
+    "properties": {
+     "kind": {
+      "type": "string",
+      "pattern": "^(digital|review)$",
+      "title": "Kind"
+     }
+    },
+    "type": "object",
+    "required": [
+     "kind"
+    ],
+    "title": "ExportIn"
+   },
+   "GenerateIn": {
+    "properties": {
+     "question_ids": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array",
+        "maxItems": 500
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Question Ids"
+     },
+     "include_approved": {
+      "type": "boolean",
+      "title": "Include Approved",
+      "default": false
+     }
+    },
+    "type": "object",
+    "title": "GenerateIn"
+   },
+   "HTTPValidationError": {
+    "properties": {
+     "detail": {
+      "items": {
+       "$ref": "#/components/schemas/ValidationError"
+      },
+      "type": "array",
+      "title": "Detail"
+     }
+    },
+    "type": "object",
+    "title": "HTTPValidationError"
+   },
+   "JobOut": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "type": {
+      "type": "string",
+      "title": "Type"
+     },
+     "status": {
+      "type": "string",
+      "title": "Status"
+     },
+     "progress": {
+      "type": "number",
+      "title": "Progress"
+     },
+     "message": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Message"
+     },
+     "error": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Error"
+     },
+     "attempts": {
+      "type": "integer",
+      "title": "Attempts"
+     },
+     "max_attempts": {
+      "type": "integer",
+      "title": "Max Attempts"
+     },
+     "result": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Result"
+     },
+     "assignment_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Assignment Id"
+     },
+     "profile_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Profile Id"
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Created At"
+     },
+     "finished_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Finished At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "type",
+     "status",
+     "progress",
+     "message",
+     "error",
+     "attempts",
+     "max_attempts",
+     "result",
+     "assignment_id",
+     "profile_id",
+     "created_at",
+     "finished_at"
+    ],
+    "title": "JobOut"
+   },
+   "Margins": {
+    "properties": {
+     "top": {
+      "type": "number",
+      "maximum": 80.0,
+      "minimum": 5.0,
+      "title": "Top",
+      "default": 22.0
+     },
+     "bottom": {
+      "type": "number",
+      "maximum": 80.0,
+      "minimum": 5.0,
+      "title": "Bottom",
+      "default": 18.0
+     },
+     "left": {
+      "type": "number",
+      "maximum": 80.0,
+      "minimum": 5.0,
+      "title": "Left",
+      "default": 25.0
+     },
+     "right": {
+      "type": "number",
+      "maximum": 80.0,
+      "minimum": 5.0,
+      "title": "Right",
+      "default": 15.0
+     }
+    },
+    "type": "object",
+    "title": "Margins"
+   },
+   "MergeIn": {
+    "properties": {
+     "ids": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "maxItems": 50,
+      "minItems": 2,
+      "title": "Ids"
+     }
+    },
+    "type": "object",
+    "required": [
+     "ids"
+    ],
+    "title": "MergeIn"
+   },
+   "PreviewIn": {
+    "properties": {
+     "text": {
+      "type": "string",
+      "maxLength": 2000,
+      "minLength": 1,
+      "title": "Text"
+     },
+     "style": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/StyleIn"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "paper": {
+      "type": "string",
+      "pattern": "^(ruled|blank|grid)$",
+      "title": "Paper",
+      "default": "ruled"
+     }
+    },
+    "type": "object",
+    "required": [
+     "text"
+    ],
+    "title": "PreviewIn"
+   },
+   "ProfileCreate": {
+    "properties": {
+     "name": {
+      "type": "string",
+      "maxLength": 120,
+      "minLength": 1,
+      "title": "Name"
+     }
+    },
+    "type": "object",
+    "required": [
+     "name"
+    ],
+    "title": "ProfileCreate"
+   },
+   "ProfileOut": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "name": {
+      "type": "string",
+      "title": "Name"
+     },
+     "status": {
+      "type": "string",
+      "title": "Status"
+     },
+     "style": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Style"
+     },
+     "metrics": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Metrics"
+     },
+     "coverage": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Coverage"
+     },
+     "quality_report": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Quality Report"
+     },
+     "library_version": {
+      "type": "integer",
+      "title": "Library Version"
+     },
+     "error": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Error"
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Created At"
+     },
+     "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Updated At"
+     },
+     "samples": {
+      "items": {
+       "$ref": "#/components/schemas/SampleOut"
+      },
+      "type": "array",
+      "title": "Samples",
+      "default": []
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "name",
+     "status",
+     "style",
+     "metrics",
+     "coverage",
+     "quality_report",
+     "library_version",
+     "error",
+     "created_at",
+     "updated_at"
+    ],
+    "title": "ProfileOut"
+   },
+   "ProfileUpdate": {
+    "properties": {
+     "name": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 120,
+        "minLength": 1
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Name"
+     },
+     "style": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/StyleIn"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "type": "object",
+    "title": "ProfileUpdate"
+   },
+   "QuestionIn": {
+    "properties": {
+     "number": {
+      "type": "string",
+      "maxLength": 32,
+      "title": "Number",
+      "default": ""
+     },
+     "text": {
+      "type": "string",
+      "maxLength": 20000,
+      "minLength": 1,
+      "title": "Text"
+     },
+     "marks": {
+      "anyOf": [
+       {
+        "type": "number",
+        "maximum": 1000.0,
+        "minimum": 0.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Marks"
+     },
+     "instructions": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 5000
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Instructions"
+     },
+     "context": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 20000
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Context"
+     },
+     "after_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "After Id"
+     }
+    },
+    "type": "object",
+    "required": [
+     "text"
+    ],
+    "title": "QuestionIn"
+   },
+   "QuestionOut": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "position": {
+      "type": "integer",
+      "title": "Position"
+     },
+     "number": {
+      "type": "string",
+      "title": "Number"
+     },
+     "text": {
+      "type": "string",
+      "title": "Text"
+     },
+     "marks": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Marks"
+     },
+     "instructions": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Instructions"
+     },
+     "context": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Context"
+     },
+     "pages": {
+      "items": {},
+      "type": "array",
+      "title": "Pages"
+     },
+     "figures": {
+      "items": {},
+      "type": "array",
+      "title": "Figures"
+     },
+     "confidence": {
+      "type": "number",
+      "title": "Confidence"
+     },
+     "needs_review": {
+      "type": "boolean",
+      "title": "Needs Review"
+     },
+     "review_reasons": {
+      "items": {},
+      "type": "array",
+      "title": "Review Reasons"
+     },
+     "has_visual": {
+      "type": "boolean",
+      "title": "Has Visual"
+     },
+     "excluded": {
+      "type": "boolean",
+      "title": "Excluded"
+     },
+     "origin": {
+      "type": "string",
+      "title": "Origin"
+     },
+     "answer": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/AnswerOut"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "position",
+     "number",
+     "text",
+     "marks",
+     "instructions",
+     "context",
+     "pages",
+     "figures",
+     "confidence",
+     "needs_review",
+     "review_reasons",
+     "has_visual",
+     "excluded",
+     "origin"
+    ],
+    "title": "QuestionOut"
+   },
+   "QuestionUpdate": {
+    "properties": {
+     "number": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 32
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Number"
+     },
+     "text": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 20000,
+        "minLength": 1
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Text"
+     },
+     "marks": {
+      "anyOf": [
+       {
+        "type": "number",
+        "maximum": 1000.0,
+        "minimum": 0.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Marks"
+     },
+     "clear_marks": {
+      "type": "boolean",
+      "title": "Clear Marks",
+      "default": false
+     },
+     "instructions": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 5000
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Instructions"
+     },
+     "context": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 20000
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Context"
+     },
+     "excluded": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Excluded"
+     },
+     "reviewed": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Reviewed"
+     }
+    },
+    "type": "object",
+    "title": "QuestionUpdate"
+   },
+   "RenderIn": {
+    "properties": {
+     "preview": {
+      "type": "boolean",
+      "title": "Preview",
+      "default": true
+     }
+    },
+    "type": "object",
+    "title": "RenderIn"
+   },
+   "RenderSettings": {
+    "properties": {
+     "page_size": {
+      "type": "string",
+      "enum": [
+       "A4",
+       "Letter"
+      ],
+      "title": "Page Size",
+      "default": "A4"
+     },
+     "orientation": {
+      "type": "string",
+      "enum": [
+       "portrait",
+       "landscape"
+      ],
+      "title": "Orientation",
+      "default": "portrait"
+     },
+     "paper": {
+      "type": "string",
+      "enum": [
+       "ruled",
+       "blank",
+       "grid",
+       "source"
+      ],
+      "title": "Paper",
+      "default": "ruled"
+     },
+     "paper_color": {
+      "type": "string",
+      "title": "Paper Color",
+      "default": "#fffdf8"
+     },
+     "rule_color": {
+      "type": "string",
+      "title": "Rule Color",
+      "default": "#9fbbe0"
+     },
+     "margin_line": {
+      "type": "boolean",
+      "title": "Margin Line",
+      "default": true
+     },
+     "margins": {
+      "$ref": "#/components/schemas/Margins"
+     },
+     "line_spacing_mm": {
+      "type": "number",
+      "maximum": 20.0,
+      "minimum": 4.0,
+      "title": "Line Spacing Mm",
+      "default": 8.0
+     },
+     "handwriting_size_mm": {
+      "type": "number",
+      "maximum": 8.0,
+      "minimum": 1.2,
+      "title": "Handwriting Size Mm",
+      "description": "Target x-height",
+      "default": 2.8
+     },
+     "ink_color": {
+      "type": "string",
+      "title": "Ink Color",
+      "default": "#1b2a6b"
+     },
+     "stroke_weight": {
+      "type": "number",
+      "maximum": 2.0,
+      "minimum": 0.6,
+      "title": "Stroke Weight",
+      "default": 1.0
+     },
+     "slant_offset_deg": {
+      "type": "number",
+      "maximum": 20.0,
+      "minimum": -20.0,
+      "title": "Slant Offset Deg",
+      "default": 0.0
+     },
+     "char_spacing": {
+      "type": "number",
+      "maximum": 3.0,
+      "minimum": 0.3,
+      "title": "Char Spacing",
+      "default": 1.0
+     },
+     "word_spacing": {
+      "type": "number",
+      "maximum": 3.0,
+      "minimum": 0.4,
+      "title": "Word Spacing",
+      "default": 1.0
+     },
+     "variation": {
+      "type": "number",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Variation",
+      "default": 0.5
+     },
+     "paragraph_indent_mm": {
+      "type": "number",
+      "maximum": 40.0,
+      "minimum": 0.0,
+      "title": "Paragraph Indent Mm",
+      "default": 6.0
+     },
+     "question_spacing_lines": {
+      "type": "integer",
+      "maximum": 6.0,
+      "minimum": 0.0,
+      "title": "Question Spacing Lines",
+      "default": 1
+     },
+     "include_question_text": {
+      "type": "boolean",
+      "title": "Include Question Text",
+      "default": true
+     },
+     "underline_question_numbers": {
+      "type": "boolean",
+      "title": "Underline Question Numbers",
+      "default": true
+     },
+     "show_marks": {
+      "type": "boolean",
+      "title": "Show Marks",
+      "default": false
+     },
+     "page_numbers": {
+      "type": "boolean",
+      "title": "Page Numbers",
+      "default": true
+     },
+     "header_text": {
+      "type": "string",
+      "maxLength": 200,
+      "title": "Header Text",
+      "default": ""
+     },
+     "footer_text": {
+      "type": "string",
+      "maxLength": 200,
+      "title": "Footer Text",
+      "default": ""
+     },
+     "seed": {
+      "type": "integer",
+      "maximum": 2147483647.0,
+      "minimum": 0.0,
+      "title": "Seed",
+      "default": 1234
+     },
+     "fit_to_space": {
+      "type": "boolean",
+      "title": "Fit To Space",
+      "default": true
+     },
+     "min_fit_scale": {
+      "type": "number",
+      "maximum": 1.0,
+      "minimum": 0.4,
+      "title": "Min Fit Scale",
+      "default": 0.7
+     },
+     "answer_prefix": {
+      "type": "string",
+      "maxLength": 20,
+      "title": "Answer Prefix",
+      "default": ""
+     },
+     "extra_page_paper": {
+      "type": "string",
+      "enum": [
+       "ruled",
+       "blank",
+       "grid"
+      ],
+      "title": "Extra Page Paper",
+      "default": "ruled"
+     }
+    },
+    "type": "object",
+    "title": "RenderSettings"
+   },
+   "RenderedOut": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "kind": {
+      "type": "string",
+      "title": "Kind"
+     },
+     "is_preview": {
+      "type": "boolean",
+      "title": "Is Preview"
+     },
+     "page_count": {
+      "type": "integer",
+      "title": "Page Count"
+     },
+     "warnings": {
+      "items": {},
+      "type": "array",
+      "title": "Warnings"
+     },
+     "size_bytes": {
+      "type": "integer",
+      "title": "Size Bytes"
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Created At"
+     },
+     "downloaded_at": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Downloaded At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "kind",
+     "is_preview",
+     "page_count",
+     "warnings",
+     "size_bytes",
+     "created_at",
+     "downloaded_at"
+    ],
+    "title": "RenderedOut"
+   },
+   "ReorderIn": {
+    "properties": {
+     "ids": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "maxItems": 500,
+      "minItems": 1,
+      "title": "Ids"
+     }
+    },
+    "type": "object",
+    "required": [
+     "ids"
+    ],
+    "title": "ReorderIn"
+   },
+   "SampleOut": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "kind": {
+      "type": "string",
+      "title": "Kind"
+     },
+     "template_page": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Template Page"
+     },
+     "original_filename": {
+      "type": "string",
+      "title": "Original Filename"
+     },
+     "mime_type": {
+      "type": "string",
+      "title": "Mime Type"
+     },
+     "transcript": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Transcript"
+     },
+     "corrections": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Corrections"
+     },
+     "status": {
+      "type": "string",
+      "title": "Status"
+     },
+     "quality": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Quality"
+     },
+     "has_processed": {
+      "type": "boolean",
+      "title": "Has Processed",
+      "default": false
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Created At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "kind",
+     "template_page",
+     "original_filename",
+     "mime_type",
+     "transcript",
+     "corrections",
+     "status",
+     "quality",
+     "created_at"
+    ],
+    "title": "SampleOut"
+   },
+   "SampleUpdate": {
+    "properties": {
+     "transcript": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 20000
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Transcript"
+     },
+     "rotate": {
+      "anyOf": [
+       {
+        "type": "number",
+        "maximum": 360.0,
+        "minimum": -360.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Rotate"
+     },
+     "crop": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "number"
+        },
+        "type": "array",
+        "maxItems": 4,
+        "minItems": 4
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Crop"
+     },
+     "template_page": {
+      "anyOf": [
+       {
+        "type": "integer",
+        "maximum": 20.0,
+        "minimum": 0.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Template Page"
+     }
+    },
+    "type": "object",
+    "title": "SampleUpdate"
+   },
+   "SplitIn": {
+    "properties": {
+     "at": {
+      "type": "integer",
+      "minimum": 1.0,
+      "title": "At",
+      "description": "Character offset in the question text where the second part starts"
+     },
+     "number": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 32
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Number"
+     }
+    },
+    "type": "object",
+    "required": [
+     "at"
+    ],
+    "title": "SplitIn"
+   },
+   "StyleIn": {
+    "properties": {
+     "handwriting_size_mm": {
+      "anyOf": [
+       {
+        "type": "number",
+        "maximum": 8.0,
+        "minimum": 1.2
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Handwriting Size Mm"
+     },
+     "stroke_weight": {
+      "anyOf": [
+       {
+        "type": "number",
+        "maximum": 2.0,
+        "minimum": 0.6
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Stroke Weight"
+     },
+     "slant_offset_deg": {
+      "anyOf": [
+       {
+        "type": "number",
+        "maximum": 20.0,
+        "minimum": -20.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Slant Offset Deg"
+     },
+     "char_spacing": {
+      "anyOf": [
+       {
+        "type": "number",
+        "maximum": 3.0,
+        "minimum": 0.3
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Char Spacing"
+     },
+     "word_spacing": {
+      "anyOf": [
+       {
+        "type": "number",
+        "maximum": 3.0,
+        "minimum": 0.4
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Word Spacing"
+     },
+     "variation": {
+      "anyOf": [
+       {
+        "type": "number",
+        "maximum": 1.0,
+        "minimum": 0.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Variation"
+     },
+     "ink_color": {
+      "anyOf": [
+       {
+        "type": "string",
+        "pattern": "^#[0-9a-fA-F]{6}$"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Ink Color"
+     }
+    },
+    "type": "object",
+    "title": "StyleIn"
+   },
+   "TokenOut": {
+    "properties": {
+     "access_token": {
+      "type": "string",
+      "title": "Access Token"
+     },
+     "token_type": {
+      "type": "string",
+      "title": "Token Type",
+      "default": "bearer"
+     },
+     "user": {
+      "$ref": "#/components/schemas/UserOut"
+     }
+    },
+    "type": "object",
+    "required": [
+     "access_token",
+     "user"
+    ],
+    "title": "TokenOut"
+   },
+   "UserOut": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "email": {
+      "type": "string",
+      "title": "Email"
+     },
+     "display_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Display Name"
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Created At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "email",
+     "display_name",
+     "created_at"
+    ],
+    "title": "UserOut"
+   },
+   "ValidationError": {
+    "properties": {
+     "loc": {
+      "items": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "integer"
+        }
+       ]
+      },
+      "type": "array",
+      "title": "Location"
+     },
+     "msg": {
+      "type": "string",
+      "title": "Message"
+     },
+     "type": {
+      "type": "string",
+      "title": "Error Type"
+     },
+     "input": {
+      "title": "Input"
+     },
+     "ctx": {
+      "type": "object",
+      "title": "Context"
+     }
+    },
+    "type": "object",
+    "required": [
+     "loc",
+     "msg",
+     "type"
+    ],
+    "title": "ValidationError"
+   }
+  }
+ }
+}

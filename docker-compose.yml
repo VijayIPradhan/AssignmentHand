@@ -1,0 +1,69 @@
+name: assignmenthand
+
+x-backend-env: &backend-env
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql+psycopg://assignmenthand:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/assignmenthand
+    STORAGE_ROOT: /data/storage
+    RUN_WORKER_IN_PROCESS: "false"
+    # Passed through from the host environment so the key never needs to be written to a file
+    AWS_BEARER_TOKEN_BEDROCK: ${AWS_BEARER_TOKEN_BEDROCK:-}
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: assignmenthand
+      POSTGRES_USER: assignmenthand
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U assignmenthand -d assignmenthand"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    build: ./backend
+    image: assignmenthand-backend:latest
+    <<: *backend-env
+    volumes:
+      - filedata:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    expose: ["8000"]
+    restart: unless-stopped
+
+  worker:
+    image: assignmenthand-backend:latest
+    <<: *backend-env
+    command: ["python", "-m", "app.jobs.worker"]
+    volumes:
+      - filedata:/data
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      disable: true
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        BACKEND_URL: http://api:8000
+    environment:
+      BACKEND_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  filedata:

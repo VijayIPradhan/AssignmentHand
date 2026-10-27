@@ -1,0 +1,136 @@
+@import "tailwindcss";
+
+/*
+  Paper & ink.
+  paper     #fbfaf6  page background (a whiter sheet than the usual cream)
+  sheet     #ffffff  raised writing surfaces
+  rule      #c9d6ec  the faint blue ruling of exercise paper
+  margin    #b4372f  the red margin line; also used for errors
+  ink       #1b2a6b  primary actions, links, headings
+  graphite  #262a33  body text
+*/
+@theme {
+  --color-paper: #fbfaf6;
+  --color-paper-deep: #f3f1ea;
+  --color-sheet: #ffffff;
+  --color-line: #e3e0d6;
+  --color-line-strong: #cfcabd;
+  --color-rule: #c9d6ec;
+  --color-rule-soft: #e6ecf6;
+  --color-margin: #b4372f;
+  --color-margin-soft: #fbecea;
+  --color-ink: #1b2a6b;
+  --color-ink-hover: #142057;
+  --color-ink-soft: #3b4c8f;
+  --color-ink-wash: #eef1fa;
+  --color-graphite: #262a33;
+  --color-muted: #5b606d;
+  --color-faint: #80848f;
+  --color-ok: #24613f;
+  --color-ok-soft: #e7f2ea;
+  --color-warn: #7d5300;
+  --color-warn-soft: #fbf1d9;
+
+  --font-serif: var(--font-newsreader), "Iowan Old Style", Georgia, serif;
+  --font-sans: var(--font-public-sans), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-sheet: 6px;
+}
+
+html {
+  background: var(--color-paper);
+  color: var(--color-graphite);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  font-feature-settings: "kern", "liga";
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-serif);
+  color: var(--color-ink);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  line-height: 1.2;
+}
+
+::selection {
+  background: #d6dff3;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* The one decorative device: the left margin rule of an exercise book, beside page titles. */
+.page-title {
+  position: relative;
+  padding-left: 1.1rem;
+}
+.page-title::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.2em;
+  bottom: 0.2em;
+  width: 2px;
+  background: var(--color-margin);
+  opacity: 0.85;
+}
+
+/* Faint ruling behind writing surfaces (preview areas, answer editor). */
+.ruled {
+  background-color: var(--color-sheet);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(1.75rem - 1px),
+    var(--color-rule-soft) calc(1.75rem - 1px),
+    var(--color-rule-soft) 1.75rem
+  );
+  background-attachment: local;
+}
+
+textarea.ruled {
+  line-height: 1.75rem;
+  padding-top: 0.25rem;
+}
+
+.prose-q table {
+  border-collapse: collapse;
+  margin: 0.5rem 0;
+  font-size: 0.875rem;
+}
+.prose-q th,
+.prose-q td {
+  border: 1px solid var(--color-line-strong);
+  padding: 0.25rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+.prose-q th {
+  background: var(--color-paper-deep);
+  font-weight: 600;
+}
+
+dialog::backdrop {
+  background: rgb(27 42 107 / 0.25);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
