@@ -78,7 +78,19 @@ Formatting (the renderer supports only this):
 - Tables in pipe format (| a | b |, then |---|---|) only when the question calls for one.
 - Mathematics in LaTeX: inline $...$ and displayed $$...$$ on its own line. Supported: \\frac, \\sqrt, ^, _, Greek letters, common operators and relations, \\text{}.
 - **text** renders as underlined text; use it sparingly for key terms.
-- No headings other than "## " subheadings for long multi-part answers, no code blocks, no emoji, no HTML.
+- No headings other than "## " subheadings for long multi-part answers, no code blocks (except the diagram block below), no emoji, no HTML.
+- Diagrams: when the question asks for a diagram, graph or sketch that is points, lines, bars or circles on x-y axes (classification examples such as KNN or SVM, clustering, regression lines, trends, simple bar or line charts), draw it with one fenced block where it belongs in the answer. The block is drawn by hand from this JSON; keep labels to a few words:
+```diagram
+{"type": "plot", "size": "small", "x_label": "...", "y_label": "...", "x_range": [0, 10], "y_range": [0, 6],
+ "series": [{"name": "Class A", "marker": "triangle", "points": [[1, 2], [2, 3]]},
+            {"name": "Class B", "marker": "circle", "points": [[7, 4], [8, 5]]}],
+ "points": [{"x": 5, "y": 3, "marker": "star", "label": "new point"}],
+ "circles": [{"x": 5, "y": 3, "around_nearest": 3, "label": "k = 3"}],
+ "lines": [{"points": [[0, 1], [10, 5]], "arrow": false, "dashed": false, "label": ""}],
+ "labels": [{"x": 1, "y": 5, "text": "..."}],
+ "caption": "Fig: ..."}
+```
+  Markers: triangle, circle, square, cross, plus, star, dot. A series may set "connect": true (line chart) or "bars": true (bar chart); "ticks": true numbers the axes. Use "around_nearest": k to circle the k nearest points, or "r" for a radius in x units. Make the picture show what the text explains (for KNN, choose points so the k nearest really give the stated class). Keep x and y ranges in about a 1.6 : 1 ratio so distances look right. Only for these plots: for other diagrams (flowcharts, circuits, trees, block diagrams) describe them in words and add a "requires_diagram" flag.
 - Do not restate the question or number the answer; the question number is written separately."""
 
 

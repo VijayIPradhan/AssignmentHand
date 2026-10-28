@@ -61,7 +61,9 @@ def _migrate_sqlite() -> None:
         # Created without migrations (create_all): record which schema it already matches, then upgrade.
         job_cols = {c["name"] for c in insp.get_columns("processing_jobs")} if "processing_jobs" in tables else set()
         user_cols = {c["name"] for c in insp.get_columns("users")}
-        if "model_routing" in user_cols:
+        if "rate_limit_hits" in tables:
+            current = "0006"
+        elif "model_routing" in user_cols:
             current = "0005"
         elif "answer_preferences" in user_cols:
             current = "0004"

@@ -86,7 +86,7 @@ def remove_profile(pid: str, user: User = Depends(current_user), db: Session = D
 
 
 @router.post("/{pid}/samples", response_model=SampleOut, status_code=201)
-async def upload_sample(
+def upload_sample(
     pid: str,
     file: UploadFile = File(...),
     kind: str = Form("template", pattern="^(template|freeform)$"),
@@ -98,7 +98,7 @@ async def upload_sample(
     p = owned_profile(db, pid, user)
     if len(p.samples) >= get_settings().max_sample_files_per_profile:
         raise Conflict("This profile already has the maximum number of samples")
-    data, mime, _sha = await read_upload(file, SAMPLE_TYPES)
+    data, mime, _sha = read_upload(file, SAMPLE_TYPES)
     try:
         load_image(data, mime)  # validate it decodes before storing
     except SampleImageError as exc:

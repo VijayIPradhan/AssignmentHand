@@ -647,6 +647,30 @@ export interface paths {
         patch: operations["update_question_api_v1_questions__qid__patch"];
         trace?: never;
     };
+    "/api/v1/questions/{qid}/answer-space": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Answer Space
+         * @description Place this question's answer area on a page of the original PDF by hand.
+         */
+        put: operations["set_answer_space_api_v1_questions__qid__answer_space_put"];
+        post?: never;
+        /**
+         * Reset Answer Space
+         * @description Go back to the answer area found when the PDF was read.
+         */
+        delete: operations["reset_answer_space_api_v1_questions__qid__answer_space_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assignments/{aid}/questions/reorder": {
         parameters: {
             query?: never;
@@ -1116,6 +1140,22 @@ export interface components {
             tone?: string | null;
             /** Extra Instructions */
             extra_instructions?: string | null;
+        };
+        /**
+         * AnswerSpaceIn
+         * @description An answer area on a page of the original PDF, in PDF points from the page's top-left corner.
+         */
+        AnswerSpaceIn: {
+            /** Page */
+            page: number;
+            /** Top */
+            top: number;
+            /** Bottom */
+            bottom: number;
+            /** X0 */
+            x0: number;
+            /** X1 */
+            x1: number;
         };
         /** AnswerUpdate */
         AnswerUpdate: {
@@ -3238,6 +3278,72 @@ export interface operations {
                 "application/json": components["schemas"]["QuestionUpdate"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_answer_space_api_v1_questions__qid__answer_space_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                qid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerSpaceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_answer_space_api_v1_questions__qid__answer_space_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                qid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

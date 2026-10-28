@@ -30,15 +30,31 @@ The API container runs `alembic upgrade head` before starting. Health checks:
 ## Backups
 
 - Database: `docker compose exec db pg_dump -U assignmenthand assignmenthand > backup.sql`
-- Files: back up the `filedata` volume (uploaded samples, PDFs, glyph libraries, exports).
+- Files: back up the `filedata` volume (uploaded samples, PDFs, glyph libraries, exports), or with R2/S3
+  enable bucket versioning or a scheduled copy of the bucket.
 Both contain private user data - encrypt backups and restrict access.
 
 ## Scaling
 
-- Run more workers: `docker compose up -d --scale worker=3` (job claiming is safe on PostgreSQL).
-- API replicas behind a load balancer need shared storage (implement the `Storage` interface for S3 or mount a
-  shared volume) and, if strict limits matter, a shared rate-limit store (current limiter is per process).
+- Run more workers: `docker compose up -d --scale worker=3` (job claiming is safe on PostgreSQL). Each worker
+  runs `WORKER_CONCURRENCY` jobs at once (default 2; always 1 on SQLite).
+- API: `WEB_CONCURRENCY` processes per container, and any number of containers behind a load balancer. Rate
+  limits (including login attempts) are stored in the database, so they hold across all of them.
+- Several servers need shared file storage: use Cloudflare R2 (or another S3-compatible store), see below.
 - No GPU is required. Rendering a 10-page document takes a few seconds of CPU; AI generation dominates latency.
+
+### Cloudflare R2
+
+1. In the Cloudflare dashboard: R2 → create a bucket (keep it private; no public access or custom domain is
+   needed, all downloads go through the API).
+2. R2 → Manage API tokens → create a token with **Object Read & Write** for that bucket only. Note the Access Key
+   ID, Secret Access Key and your account ID.
+3. Set `STORAGE_BACKEND=r2`, `S3_BUCKET`, `R2_ACCOUNT_ID`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (EU
+   jurisdiction buckets: set `S3_ENDPOINT_URL=https://<account_id>.eu.r2.cloudflarestorage.com` instead of the
+   account ID). The `filedata` volume is then no longer needed for files.
+4. Moving an existing install: stop the app, then copy the files once (re-runnable; it skips what is already
+   there): `docker compose run --rm worker python -m app.storage.copy --from /data/storage` (add `--dry-run` to
+   count first). Start the app; `GET /api/v1/health/ready` reports `storage: ok` when the bucket is reachable.
 
 ## Without Docker
 

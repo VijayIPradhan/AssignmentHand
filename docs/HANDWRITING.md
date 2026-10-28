@@ -62,6 +62,13 @@ sample coverage and quality:
   rotation and baseline jitter, and a smooth baseline wander per line. Same inputs + seed => identical PDF.
 - Maths: a LaTeX subset (fractions, roots, scripts, Greek, operators, accents) is laid out from your glyphs
   with hand-drawn bars and radicals. Unsupported commands are written literally and reported.
+- Diagrams: a ```diagram block in an answer (JSON, see `render/diagram.py`) is drawn by hand: wobbly
+  ink strokes at the pen width, axes with arrow heads, markers (triangle, circle, square, cross, plus, star,
+  dot), line and bar series, circles (``around_nearest: k`` encloses exactly the k nearest points, e.g. for
+  KNN), lines and arrows, a legend placed in the emptiest corner, labels moved clear of markers and outlines
+  (with a pointer when crowded), and a caption, all written in the user's glyphs. It is sized in x-heights,
+  so it shrinks with the handwriting when an answer is fitted to its space. The answer prompt asks the model
+  for such blocks when a question wants a plot on axes; other diagrams are still flagged for the student.
 - Writing on source pages: the handwriting layer is composed over the original PDF page (vector on vector).
   If an answer does not fit its space, the size is reduced (down to `min_fit_scale`), then extra pages are
   added with an `exceeds_space` warning. Generation is told the measured word capacity of each space and

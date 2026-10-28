@@ -131,3 +131,42 @@ def plain_paragraphs_pdf() -> bytes:
     c.showPage()
     c.save()
     return buf.getvalue()
+
+
+def boxed_questions_pdf() -> bytes:
+    """One question per page inside Word-style shaded row boxes (detected as a "table" of empty cells),
+    "[10 Marks] [CO6, L2]" labels, and the same header, instructions and footer on every page."""
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=(612, 792))
+    for n, q in enumerate(
+        ["Discuss the charts used to visualise data with Python.", "Explain the k-nearest neighbours algorithm."]
+    ):
+        H = 792
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(250, H - 32, "RegdNo. 325112996")
+        c.drawString(72, H - 45, "Assignment No. 1")
+        c.drawString(72, H - 68, "Course Code: ECAP776            Registration Number: _________")
+        c.drawString(72, H - 80, "Instructions:")
+        c.drawString(72, H - 92, "a. Attempt all questions given below in your own handwriting.")
+        c.drawString(72, H - 104, "b. Complete the assignment in the allocated pages only.")
+        # Shaded rows behind the question, its marks line and the blank answer area (white fill, no border)
+        c.setFillColorRGB(1, 1, 1)
+        rows = 40 if n == 0 else 2
+        for r in range(rows):
+            top = 153 + 14 * r
+            c.rect(71, H - top - 14, 470, 14, fill=1, stroke=0)
+            if r == 0:
+                c.rect(72, H - top - 14, 434, 14, fill=1, stroke=0)
+            if r == 1:
+                c.rect(397, H - top - 14, 143, 14, fill=1, stroke=0)
+        c.setFillColorRGB(0, 0, 0)
+        c.setFont("Helvetica", 11)
+        c.drawString(72, H - 164, f"Q{n + 1}. {q}")
+        c.drawString(400, H - 178, f"[10 Marks] [CO{6 - 2 * n}, L2]")
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(72, H - 720, f"Signature of the Student__________________        Page {n + 1} of 2")
+        c.drawString(72, H - 748, "Note:-")
+        c.drawString(72, H - 760, "CO: is the Course Outcome as per your course syllabus.")
+        c.showPage()
+    c.save()
+    return buf.getvalue()

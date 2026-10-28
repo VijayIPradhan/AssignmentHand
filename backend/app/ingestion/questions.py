@@ -93,8 +93,7 @@ def strip_headers_footers(lines: list[LineInfo], pages: list[PageInfo]) -> tuple
             return False
         if Q_RE.match(ln.text) or NUM_RE.match(ln.text):
             return True
-        rest, marks = extract_marks(ln.text)
-        return marks is not None and not rest.strip()
+        return marks_only(ln.text)
 
     pages_with: dict[str, set[int]] = {}
     first_q_y: dict[int, float] = {}
@@ -128,6 +127,18 @@ def strip_headers_footers(lines: list[LineInfo], pages: list[PageInfo]) -> tuple
                 continue
         out.append(ln)
     return out, footers
+
+
+# Course-outcome / Bloom-level tags printed next to marks: "[CO6, L2]", "(CO1)", "[BL3]", "K2".
+OUTCOME_TAG_RE = re.compile(
+    r"[\[(]\s*(?:CO|BL|L|K)\s*-?\d+(?:\s*[,/;]\s*(?:CO|BL|L|K)\s*-?\d+)*\s*[\])]", re.IGNORECASE
+)
+
+
+def marks_only(text: str) -> bool:
+    """A line that only carries the marks label, optionally with outcome tags ("[10 Marks] [CO6, L2]")."""
+    rest, marks = extract_marks(text)
+    return marks is not None and not OUTCOME_TAG_RE.sub("", rest).strip(" 	,;-–")
 
 
 def extract_marks(text: str) -> tuple[str, float | None]:
@@ -256,13 +267,12 @@ def _ranges(lines: list[LineInfo]) -> list[tuple[int, float, float]]:
 
 
 def _is_marks_only(ln: LineInfo) -> bool:
-    if ln.kind != "text":
-        return False
-    rest, marks = extract_marks(ln.text)
-    return marks is not None and not rest.strip()
+    return ln.kind == "text" and marks_only(ln.text)
 
 
 def _finish(d: QuestionDraft, lines: list[LineInfo]) -> QuestionDraft:
+    # Syllabus metadata ("[CO6, L2]"), not part of the question; only the tag and the spaces before it go.
+    d.text = re.sub(r"[ 	]*" + OUTCOME_TAG_RE.pattern, "", d.text, flags=re.IGNORECASE).strip()
     d.pages = sorted({ln.page for ln in lines})
     d.y_range = _ranges(lines)
     d.marks_lines = [(ln.page, ln.y0, ln.y1, ln.x0) for ln in lines if _is_marks_only(ln)]

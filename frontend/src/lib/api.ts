@@ -274,6 +274,9 @@ export const api = {
   updateQuestion: (qid: string, body: QuestionUpdate) =>
     request<Question>(`/questions/${qid}`, { method: "PATCH", json: body }),
   deleteQuestion: (qid: string) => request<void>(`/questions/${qid}`, { method: "DELETE" }),
+  setAnswerSpace: (qid: string, body: { page: number; top: number; bottom: number; x0: number; x1: number }) =>
+    request<Question>(`/questions/${qid}/answer-space`, { method: "PUT", json: body }),
+  resetAnswerSpace: (qid: string) => request<Question>(`/questions/${qid}/answer-space`, { method: "DELETE" }),
   reorderQuestions: (aid: string, ids: string[]) =>
     request<Question[]>(`/assignments/${aid}/questions/reorder`, { json: { ids } }),
   mergeQuestions: (aid: string, ids: string[]) =>

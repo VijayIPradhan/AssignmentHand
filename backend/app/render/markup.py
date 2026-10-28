@@ -59,7 +59,14 @@ class Figure:
     index: int
 
 
-Block = Paragraph | Heading | ListItem | Table | DisplayMath | Figure
+@dataclass
+class Diagram:
+    """A hand-drawn diagram: the JSON description inside a ```diagram fence (see render/diagram.py)."""
+
+    src: str
+
+
+Block = Paragraph | Heading | ListItem | Table | DisplayMath | Figure | Diagram
 
 _LIST_RE = re.compile(r"^(\s*)([-*•]|\d{1,3}[.)]|[a-zA-Z][.)]|\([a-zA-Z0-9]{1,4}\)|[ivxIVX]{1,5}[.)])\s+(.*)$")
 _TABLE_SEP = re.compile(r"^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$")
@@ -158,6 +165,16 @@ def parse_blocks(text: str) -> list[Block]:
                 i += 1
             blocks.append(DisplayMath(" ".join(a.strip() for a in acc).strip()))
             continue
+        if stripped.lower().startswith("```diagram"):
+            flush_para()
+            body = []
+            i += 1
+            while i < len(lines) and not lines[i].strip().startswith("```"):
+                body.append(lines[i])
+                i += 1
+            i += 1  # the closing fence
+            blocks.append(Diagram("\n".join(body)))
+            continue
         if m := _FIGURE_RE.match(stripped):
             flush_para()
             blocks.append(Figure(int(m.group(1))))
@@ -202,7 +219,11 @@ def plain_text(inlines: list[Inline]) -> str:
     return "".join(x.text if isinstance(x, Text) else f"${x.src}$" for x in inlines)
 
 
+DIAGRAM_RE = re.compile(r"^```diagram.*?^```[ \t]*$", re.S | re.M | re.I)
+
+
 def word_count(text: str) -> int:
+    text = DIAGRAM_RE.sub(" ", text)  # a drawing, not words
     stripped = re.sub(r"\$\$.*?\$\$|\$[^$]*\$", " x ", text, flags=re.S)
     stripped = re.sub(r"[|#*_`>\[\]]", " ", stripped)
     return len(re.findall(r"[\w'’\-]+", stripped))

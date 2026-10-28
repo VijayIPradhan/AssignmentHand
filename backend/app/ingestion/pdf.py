@@ -110,6 +110,13 @@ def _table_markdown(rows: list[list[str | None]]) -> str:
     return "\n".join(out)
 
 
+def _is_data_table(rows: list[list[str | None]]) -> bool:
+    """A real table has rows with several filled cells. Word processors also draw ruled or shaded boxes
+    around a question and its blank answer area, which table detection reports as a grid of mostly
+    empty cells with at most one filled cell per row: that is layout, and its text is read as lines."""
+    return sum(1 for r in rows if sum(1 for c in r if (c or "").strip()) >= 2) >= 2
+
+
 def _line_flags(chars: list[dict]) -> tuple[float, bool, bool]:
     sizes = [c.get("size", 0) for c in chars if c.get("text", "").strip()]
     fonts = [str(c.get("fontname", "")).lower() for c in chars]
@@ -137,7 +144,7 @@ def extract_pdf(data: bytes, ocr: OcrProvider | None) -> DocExtraction:
                 try:
                     for t in page.find_tables():
                         rows = t.extract()
-                        if len(rows) >= 2 and max(len(r) for r in rows) >= 2:
+                        if len(rows) >= 2 and max(len(r) for r in rows) >= 2 and _is_data_table(rows):
                             tables.append((t.bbox, rows))
                 except Exception:  # pdfplumber table detection can fail on odd vector content
                     log.info("table detection failed", extra={"page": pi})

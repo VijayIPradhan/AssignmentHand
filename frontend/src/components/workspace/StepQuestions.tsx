@@ -21,9 +21,18 @@ import { api, errorMessage, urls } from "@/lib/api";
 import type { DocPage, Question } from "@/lib/types";
 import { RichText } from "../RichText";
 import { Badge, Button, ConfirmDialog, cx, EmptyState, Notice, Sheet, TextArea, TextField } from "../ui";
+import { AnswerAreaOverlay, answerSpaceOf, defaultArea } from "./AnswerAreas";
 import { useWorkspace } from "./context";
 
-function PageViewer({ highlight }: { highlight: number | null }) {
+function PageViewer({
+  highlight,
+  selectedId,
+  onSelect,
+}: {
+  highlight: number | null;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
   const { a } = useWorkspace();
   const doc = a.documents.find((d) => d.role === "assignment");
   const refs = useRef<Record<number, HTMLElement | null>>({});
@@ -45,8 +54,17 @@ function PageViewer({ highlight }: { highlight: number | null }) {
             highlight === i ? "border-ink shadow-[0_0_0_3px_rgb(27_42_107/0.15)]" : "border-line",
           )}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={urls.docPage(a.id, doc.id, i + 1)} alt={`Page ${i + 1} of the assignment`} className="block w-full" loading="lazy" />
+          <div className="relative select-none" data-page-surface>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={urls.docPage(a.id, doc.id, i + 1)}
+              alt={`Page ${i + 1} of the assignment`}
+              className="block w-full"
+              loading="lazy"
+              draggable={false}
+            />
+            <AnswerAreaOverlay page={pg} index={i} questions={a.questions} selectedId={selectedId} onSelect={onSelect} />
+          </div>
           <figcaption className="border-t border-line bg-paper px-3 py-1.5 text-[12.5px] text-muted">
             Page {i + 1}
             {pg.issues && pg.issues.length > 0 && (
@@ -151,6 +169,7 @@ function QuestionItem({
   onSelect,
   onMove,
   onShowPage,
+  onSelectArea,
   onAddAfter,
 }: {
   q: Question;
@@ -160,6 +179,7 @@ function QuestionItem({
   onSelect: (v: boolean) => void;
   onMove: (dir: -1 | 1) => void;
   onShowPage: (page: number) => void;
+  onSelectArea: (id: string) => void;
   onAddAfter: () => void;
 }) {
   const { a, update, reload } = useWorkspace();
@@ -353,6 +373,8 @@ function QuestionItem({
             </ul>
           )}
 
+          <AnswerAreaLine q={q} onShowPage={onShowPage} onSelectArea={onSelectArea} />
+
           {pageList.length > 0 && (
             <p className="mt-2 flex flex-wrap gap-1.5 text-[12.5px] text-muted">
               On
@@ -467,6 +489,74 @@ function QuestionItem({
   );
 }
 
+/** Where this question's answer will be written on the original pages, with a way to place it. */
+function AnswerAreaLine({
+  q,
+  onShowPage,
+  onSelectArea,
+}: {
+  q: Question;
+  onShowPage: (page: number) => void;
+  onSelectArea: (id: string) => void;
+}) {
+  const { a, reload } = useWorkspace();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const doc = a.documents.find((d) => d.role === "assignment");
+  if (!doc || !doc.pages.length || q.excluded) return null;
+  const sp = answerSpaceOf(q);
+
+  async function place() {
+    setBusy(true);
+    setError(null);
+    try {
+      const area = defaultArea(q, doc!.pages);
+      await api.setAnswerSpace(q.id, area);
+      await reload();
+      onSelectArea(q.id);
+      onShowPage(area.page);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-2 text-[12.5px] text-muted">
+      {sp ? (
+        <p>
+          Answer written on{" "}
+          <button
+            type="button"
+            className="text-ink underline decoration-rule underline-offset-2 hover:decoration-ink"
+            onClick={() => {
+              onSelectArea(q.id);
+              onShowPage(sp.page);
+            }}
+          >
+            page {sp.page + 1}
+          </button>
+          {sp.manual ? ", in the area you placed." : ", in the blank space found below the question."} Drag or resize
+          it on the page to change where it goes.
+        </p>
+      ) : (
+        <p className="flex flex-wrap items-center gap-2">
+          <span className="text-warn">No blank space was found for this answer on the original pages.</span>
+          <Button size="sm" loading={busy} onClick={() => void place()}>
+            Place answer area
+          </Button>
+        </p>
+      )}
+      {error && (
+        <Notice tone="error" className="mt-2">
+          {error}
+        </Notice>
+      )}
+    </div>
+  );
+}
+
 function AddQuestionForm({ afterId, onDone }: { afterId: string | null; onDone: () => void }) {
   const { a, reload } = useWorkspace();
   const [number, setNumber] = useState("");
@@ -521,6 +611,7 @@ export function StepQuestions() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState<{ after: string | null } | null>(null);
   const [highlight, setHighlight] = useState<number | null>(null);
+  const [areaId, setAreaId] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmReextract, setConfirmReextract] = useState(false);
@@ -649,7 +740,7 @@ export function StepQuestions() {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div className="order-2 xl:order-1">
           <div className="xl:sticky xl:top-32 xl:max-h-[calc(100vh-9rem)] xl:overflow-y-auto xl:pr-1">
-            <PageViewer highlight={highlight} />
+            <PageViewer highlight={highlight} selectedId={areaId} onSelect={setAreaId} />
           </div>
         </div>
         <div className="order-1 xl:order-2">
@@ -683,6 +774,7 @@ export function StepQuestions() {
                     }
                     onMove={(d) => move(i, d)}
                     onShowPage={showPage}
+                    onSelectArea={setAreaId}
                     onAddAfter={() => setAdding({ after: q.id })}
                   />
                   {adding?.after === q.id && (

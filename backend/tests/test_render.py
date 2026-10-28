@@ -266,3 +266,96 @@ def test_letter_style_choice_resolves_assignment_then_profile_then_samples(templ
     assert settings("joined", None) == "joined"
     assert settings("joined", "auto") == "joined"  # an assignment on "auto" follows its profile
     assert settings("joined", "separate") == "separate"
+
+
+def test_hand_placed_answer_area_is_used_exactly(template_library):
+    s = RenderSettings(paper="source", fit_to_space=False)
+    eng = GlyphCompositingEngine(template_library, EngineStyle(x_height_mm=s.handwriting_size_mm))
+    space = AnswerSpace(page=0, top=60.0, bottom=200.0, left=15.0, right=110.0)  # left of the page margin
+    res = Layouter(eng, s).run_on_source([SectionInput("a", "1", "Q", LONG[:900], space=space)], [(210.0, 297.0)])
+    glyphs = _glyphs(res.pages[0])
+    assert glyphs and min(g.x for g in glyphs) < s.margins.left  # not pushed in to the margin
+    assert max(g.x + g.glyph.width_mm * g.scale for g in glyphs) <= 110.0 + 1.0
+    assert all(60.0 <= g.y <= 200.0 for g in glyphs)
+
+
+KNN = """{"type": "plot", "x_label": "x1", "y_label": "x2", "x_range": [0, 9], "y_range": [0, 5.6],
+ "series": [{"name": "Class A", "marker": "triangle", "points": [[1.2, 1.4], [2.0, 2.6], [3.6, 3.9], [2.7, 2.7]]},
+            {"name": "Class B", "marker": "circle", "points": [[6.0, 4.2], [5.4, 3.3], [7.4, 2.6]]}],
+ "points": [{"x": 4.6, "y": 3.6, "marker": "star", "label": "new point"}],
+ "circles": [{"x": 4.6, "y": 3.6, "around_nearest": 3, "label": "k = 3"}],
+ "caption": "KNN with k = 3"}"""
+
+
+def test_diagram_block_is_parsed_and_not_counted_as_words():
+    from app.render.markup import Diagram, parse_blocks, word_count
+
+    text = f"Before the figure.\n\n```diagram\n{KNN}\n```\n\nAfter it."
+    blocks = parse_blocks(text)
+    assert [type(b).__name__ for b in blocks] == ["Paragraph", "Diagram", "Paragraph"]
+    assert isinstance(blocks[1], Diagram) and '"star"' in blocks[1].src
+    assert word_count(text) == 5
+
+
+def test_knn_diagram_is_drawn_by_hand_with_a_circle_around_the_three_nearest(template_library):
+    import math
+    import random
+
+    from app.render.diagram import DiagramDrawer, parse_spec
+
+    eng = GlyphCompositingEngine(template_library, EngineStyle(x_height_mm=3.0))
+    spec = parse_spec(KNN)
+    drawer = DiagramDrawer(eng, random.Random(1), 150.0)
+    run = drawer.plot(spec)
+    strokes = [it for it in run.items if isinstance(it, LineItem)]
+    glyphs = [it for it in run.items if isinstance(it, GlyphItem)]
+    assert len(strokes) > 15 and glyphs  # axes, markers, circle; labels written in the user's glyphs
+    assert 0 < run.width <= 150.0 and run.ascent > 40
+
+    # The circle is the stroke with the most points around the star: exactly 3 plotted points inside.
+    data = [p for s in spec.series for p in s.points]
+    star = (4.6, 3.6)
+    nearest = sorted(math.dist(star, p) for p in data)
+    assert nearest[2] < nearest[3]  # the test data has a clear 3rd/4th gap
+    # Map the recorded placements onto the drawing, then measure the actual (wobbly) strokes.
+    dx, dy = drawer.shift
+    ((rc, r),) = drawer.rings
+    c = (rc[0] + dx, rc[1] + dy)
+    ring = min(strokes, key=lambda it: abs(sum(math.dist(c, q) for q in it.pts) / len(it.pts) - r))
+    inner = min(math.dist(c, q) for q in ring.pts)
+    outer = max(math.dist(c, q) for q in ring.pts)
+    assert outer - inner < 0.15 * r  # roughly round
+    reach = []
+    for kind, mp, size in drawer.markers:
+        if kind == "star":
+            continue
+        m = (mp[0] + dx, mp[1] + dy)
+        ink = [q for it in strokes if it is not ring for q in it.pts if math.dist(m, q) < size * 1.6]
+        assert ink, kind
+        reach.append((min(math.dist(c, q) for q in ink), max(math.dist(c, q) for q in ink)))
+    reach.sort()
+    # The three nearest markers are wholly inside the drawn outline, the fourth wholly outside it.
+    assert all(far < inner for _near, far in reach[:3])
+    assert reach[3][0] > outer
+
+
+def test_diagram_shrinks_with_the_handwriting(template_library):
+    import random
+
+    from app.render.diagram import DiagramDrawer, parse_spec
+
+    spec = parse_spec(KNN)
+    big = DiagramDrawer(GlyphCompositingEngine(template_library, EngineStyle(x_height_mm=3.0)), random.Random(1), 180.0)
+    small = DiagramDrawer(
+        GlyphCompositingEngine(template_library, EngineStyle(x_height_mm=2.1)), random.Random(1), 180.0
+    )
+    assert small.plot(spec).width < big.plot(spec).width * 0.8  # fit-to-space shrinks the drawing too
+
+
+def test_broken_diagrams_warn_instead_of_failing(template_library):
+    bad = 'Text.\n\n```diagram\n{"type": "plot", "series": [\n```\n\nMore.'
+    unsupported = 'Text.\n\n```diagram\n{"type": "flowchart"}\n```'
+    _s, res = _layout(template_library, [bad, unsupported])
+    msgs = [w["message"] for w in res.warnings if w["type"] == "diagram_invalid"]
+    assert len(msgs) == 2 and "not valid JSON" in msgs[0] and "not supported" in msgs[1]
+    assert _glyphs(res.pages[0])  # the rest of the answer is still written

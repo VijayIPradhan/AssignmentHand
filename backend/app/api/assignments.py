@@ -28,6 +28,7 @@ from app.render.markup import word_count
 from app.render.settings import RenderSettings
 from app.schemas import (
     AnswerOut,
+    AnswerSpaceIn,
     AnswerUpdate,
     AssignmentDetail,
     AssignmentOut,
@@ -92,7 +93,7 @@ def list_assignments(user: User = Depends(current_user), db: Session = Depends(g
 
 
 @router.post("/assignments", response_model=AssignmentDetail, status_code=201)
-async def create_assignment(
+def create_assignment(
     file: UploadFile = File(..., description="Assignment PDF"),
     title: str | None = Form(None, max_length=255),
     subject: str | None = Form(None, max_length=120),
@@ -100,7 +101,7 @@ async def create_assignment(
     db: Session = Depends(get_db),
 ):
     """Upload an assignment PDF; question extraction starts in the background."""
-    data, _mime, sha = await read_upload(file, {"application/pdf"})
+    data, _mime, sha = read_upload(file, {"application/pdf"})
     try:
         pages = validate_pdf(data, get_settings().max_pdf_pages)
     except PdfValidationError as exc:
@@ -164,12 +165,12 @@ def remove_assignment(aid: str, user: User = Depends(current_user), db: Session 
 
 
 @router.post("/assignments/{aid}/references", response_model=DocumentOut, status_code=201)
-async def add_reference(
+def add_reference(
     aid: str, file: UploadFile = File(...), user: User = Depends(current_user), db: Session = Depends(get_db)
 ):
     """Attach reference material (PDF). Its text is used to ground answers and citations."""
     a = owned_assignment(db, aid, user)
-    data, _mime, sha = await read_upload(file, {"application/pdf"})
+    data, _mime, sha = read_upload(file, {"application/pdf"})
     try:
         pages = validate_pdf(data, get_settings().max_pdf_pages)
     except PdfValidationError as exc:
@@ -305,6 +306,33 @@ def update_question(qid: str, body: QuestionUpdate, user: User = Depends(current
         q.marks = None
     if body.reviewed:
         q.needs_review = False
+    db.commit()
+    return q
+
+
+@router.put("/questions/{qid}/answer-space", response_model=QuestionOut)
+def set_answer_space(qid: str, body: AnswerSpaceIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Place this question's answer area on a page of the original PDF by hand."""
+    q = owned_question(db, qid, user)
+    doc = svc.source_document(q.assignment)
+    if doc is None or not doc.pages or body.page >= len(doc.pages):
+        raise AppError("That page is not part of the assignment PDF", code="invalid_page", status_code=422)
+    pw, ph = doc.pages[body.page]["width"], doc.pages[body.page]["height"]
+    top, bottom = max(0.0, body.top), min(ph, body.bottom)
+    x0, x1 = max(0.0, body.x0), min(pw, body.x1)
+    if bottom - top < 14 or x1 - x0 < 36:  # about one line and a few words
+        raise AppError("The answer area is too small to write in", code="area_too_small", status_code=422)
+    space = {"page": body.page, "top": top, "bottom": bottom, "x0": x0, "x1": x1, "fraction": (bottom - top) / ph}
+    q.pages = svc.with_answer_space(q.pages, space)
+    db.commit()
+    return q
+
+
+@router.delete("/questions/{qid}/answer-space", response_model=QuestionOut)
+def reset_answer_space(qid: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Go back to the answer area found when the PDF was read."""
+    q = owned_question(db, qid, user)
+    q.pages = svc.with_answer_space(q.pages, None)
     db.commit()
     return q
 

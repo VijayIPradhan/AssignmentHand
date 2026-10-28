@@ -57,14 +57,16 @@ def owned_rendered(db: Session, rid: str, user: User) -> RenderedDocument:
     return owned(db, RenderedDocument, rid, user)
 
 
-async def read_upload(file: UploadFile, allowed: set[str]) -> tuple[bytes, str, str]:
+def read_upload(file: UploadFile, allowed: set[str]) -> tuple[bytes, str, str]:
     """Read an upload with a size cap and detect its type from content (never trust the client).
 
-    Returns (data, mime, sha256)."""
+    Upload routes are plain (sync) functions: FastAPI runs them in its thread pool, so decoding images,
+    parsing PDFs and writing to object storage never block the event loop. The body has already been
+    received into a spooled temporary file, read here in chunks. Returns (data, mime, sha256)."""
     limit = get_settings().max_upload_bytes
     chunks, size = [], 0
     while True:
-        chunk = await file.read(1024 * 1024)
+        chunk = file.file.read(1024 * 1024)
         if not chunk:
             break
         size += len(chunk)

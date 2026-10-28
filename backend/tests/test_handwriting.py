@@ -193,12 +193,13 @@ def test_profile_persistence_preview_and_deletion(auth_client, tmp_env):
     prev = c.post(f"/api/v1/profiles/{pid}/preview", json={"text": "Hello ☃ world"})
     assert prev.status_code == 200 and "U+2603" in prev.headers["x-render-warnings"]
 
-    storage_dir = tmp_env / "storage"
-    assert any(storage_dir.rglob("original.png"))
+    from tests.conftest import stored_keys
+
+    assert any(k.endswith("/original.png") for k in stored_keys())
     assert c.delete(f"/api/v1/profiles/{pid}").status_code == 204
     assert c.get(f"/api/v1/profiles/{pid}").status_code == 404
-    assert not any(storage_dir.rglob("original.png"))
-    assert not any(storage_dir.rglob("v*.json"))
+    assert not any(k.endswith("/original.png") for k in stored_keys())
+    assert not any("/library/v" in k for k in stored_keys())
 
 
 def test_sample_upload_rejects_non_images(auth_client):

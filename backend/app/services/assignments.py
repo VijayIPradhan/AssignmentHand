@@ -149,7 +149,10 @@ def run_extraction(db: Session, a: Assignment, progress) -> dict:
         if prev is not None and prev.number not in matched:
             matched.add(prev.number)
             prev.position = pos
+            manual = manual_answer_space(prev.pages)
             prev.pages = layout
+            if manual is not None:
+                prev.pages = with_answer_space(layout, manual)
             if not prev.figures:
                 prev.figures = [figure_keys[i] for i in d.figure_indexes]
             log.info(f"question {d.number}: layout refreshed, text, marks and answer kept", extra={"number": d.number})
@@ -305,12 +308,12 @@ def space_capacity(a: Assignment, profile: HandwritingProfile | None) -> dict[st
     for sec in build_sections(a, require_approved=False)[0]:
         if sec.space is None:
             continue
-        text_w = 210.0 - max(s.margins.left, sec.space.left) - s.margins.right
         doc = source_document(a)
+        page_w = 210.0
         if doc and doc.pages and sec.space.page < len(doc.pages):
-            text_w = (
-                doc.pages[sec.space.page]["width"] * PT_TO_MM - max(s.margins.left, sec.space.left) - s.margins.right
-            )
+            page_w = doc.pages[sec.space.page]["width"] * PT_TO_MM
+        left, right = sec.space.edges(page_w, s.margins)
+        text_w = right - left
         lines = max(0, int((sec.space.bottom - sec.space.top) / s.line_spacing_mm) - 1)
         per_line = max(1.0, text_w / avg)
         full = lines * per_line * 0.8  # paragraph ends and indents waste part of some lines
@@ -504,6 +507,43 @@ def run_generation(
 # ------------------------------------------------------------------------------------- rendering
 
 
+def manual_answer_space(pages: list | None) -> dict | None:
+    """The answer area the user placed by hand, if any (``q.pages`` entries)."""
+    for pg in pages or []:
+        sp = pg.get("answer_space") if isinstance(pg, dict) else None
+        if sp and sp.get("manual"):
+            return sp
+    return None
+
+
+def with_answer_space(pages: list | None, space: dict | None) -> list:
+    """``q.pages`` with ``space`` as the answer area (None: back to the detected one).
+
+    The detected area is remembered under ``detected_space`` so it can be restored. Printed marks labels
+    detected inside the new area stay blocked (they are not written over)."""
+    out = [dict(pg) for pg in (pages or []) if isinstance(pg, dict)]
+    detected = None
+    for pg in out:
+        sp = pg.pop("answer_space", None)
+        if sp and not sp.get("manual"):
+            pg["detected_space"] = sp
+        detected = detected or pg.get("detected_space")
+    if space is None:
+        for pg in out:
+            if "detected_space" in pg:
+                pg["answer_space"] = pg.pop("detected_space")
+        return out
+    entry = next((pg for pg in out if pg.get("page") == space["page"]), None)
+    if entry is None:
+        entry = {"page": space["page"], "y0": space["top"], "y1": space["top"]}
+        out.append(entry)
+    blocked = []
+    if detected and detected["page"] == space["page"]:
+        blocked = [b for b in detected.get("blocked") or [] if space["top"] <= b[0] and b[1] <= space["bottom"]]
+    entry["answer_space"] = {**space, "blocked": blocked, "manual": True}
+    return out
+
+
 def ensure_render_config(db: Session, a: Assignment) -> RenderConfiguration:
     if a.render_config is None:
         a.render_config = RenderConfiguration(user_id=a.user_id, assignment_id=a.id, settings={})
@@ -556,6 +596,7 @@ def build_sections(a: Assignment, require_approved: bool) -> tuple[list[SectionI
                     sp["bottom"] * PT_TO_MM,
                     sp["x0"] * PT_TO_MM,
                     [(b[0] * PT_TO_MM, b[1] * PT_TO_MM) for b in sp.get("blocked", [])],
+                    sp["x1"] * PT_TO_MM if sp.get("x1") is not None else None,
                 )
         sections.append(SectionInput(q.id, q.number, q.text, content, q.marks, figs, space))
     return sections, unapproved
@@ -573,6 +614,7 @@ def settings_hash(
         h.update(str((signature_meta(a.user_id) or {}).get("version")).encode())  # new signature -> re-render
     for sec in sections:
         h.update(f"{sec.key}|{sec.number}|{sec.question_text}|{sec.answer}|{sec.marks}".encode())
+        h.update(repr(sec.space).encode())  # moving an answer area re-renders
     return h.hexdigest()
 
 

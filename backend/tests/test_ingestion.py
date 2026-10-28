@@ -255,3 +255,58 @@ def test_reextraction_keeps_answers_and_refreshes_layout(auth_client):
     same = next(q for q in after if q["id"] == q1["id"])
     assert same["text"] == "My corrected wording" and same["answer"]["status"] == "approved"
     assert [q["number"] for q in after] == [q["number"] for q in qs]
+
+
+def test_questions_in_shaded_layout_boxes_are_found_with_their_answer_space():
+    from app.ingestion.pdf import extract_pdf
+    from app.ingestion.questions import segment
+    from tests.pdfs import boxed_questions_pdf
+
+    doc = extract_pdf(boxed_questions_pdf(), None)
+    assert not any(ln.kind == "table" for ln in doc.lines)  # empty layout boxes are not tables
+    seg = segment(doc.lines, doc.pages, doc.figures)
+    assert [q.number for q in seg.questions] == ["1", "2"]
+    assert all(q.marks == 10 for q in seg.questions)
+    assert seg.questions[0].text == "Discuss the charts used to visualise data with Python."  # no "[CO6, L2]"
+    assert "Attempt all questions" in seg.preamble  # the instructions are not a question
+    for q in seg.questions:
+        sp = q.answer_space
+        assert sp["bottom"] - sp["top"] > 400  # the blank area down to the signature line
+        assert sp["bottom"] < 712 and sp["blocked"]  # stops above the footer; the marks line is skipped
+
+
+def test_answer_area_can_be_placed_by_hand_and_survives_rereading(auth_client):
+    from app.db import session_factory
+    from app.models import Assignment
+    from app.services.assignments import build_sections
+    from tests.pdfs import boxed_questions_pdf
+
+    c = auth_client
+    aid = c.post("/api/v1/assignments", files={"file": ("qp.pdf", boxed_questions_pdf())}).json()["id"]
+    run_jobs()
+    q1 = c.get(f"/api/v1/assignments/{aid}/questions").json()[0]
+    detected = next(p["answer_space"] for p in q1["pages"] if p.get("answer_space"))
+    area = {"page": 0, "top": 300.0, "bottom": 650.0, "x0": 90.0, "x1": 400.0}
+    r = c.put(f"/api/v1/questions/{q1['id']}/answer-space", json=area)
+    assert r.status_code == 200, r.text
+    spaces = [p["answer_space"] for p in r.json()["pages"] if p.get("answer_space")]
+    assert len(spaces) == 1 and spaces[0]["manual"] and spaces[0]["top"] == 300.0
+
+    with session_factory()() as db:  # the renderer writes exactly inside the hand-placed area
+        sec = next(s for s in build_sections(db.get(Assignment, aid), False)[0] if s.key == q1["id"])
+        assert sec.space.right is not None and abs(sec.space.right - 400 * 25.4 / 72) < 0.01
+        assert abs(sec.space.left - 90 * 25.4 / 72) < 0.01
+
+    too_small = {**area, "bottom": 305.0}
+    assert c.put(f"/api/v1/questions/{q1['id']}/answer-space", json=too_small).status_code == 422
+    assert c.put(f"/api/v1/questions/{q1['id']}/answer-space", json={**area, "page": 9}).status_code == 422
+
+    assert c.post(f"/api/v1/assignments/{aid}/extract").status_code == 202
+    run_jobs()
+    again = next(q for q in c.get(f"/api/v1/assignments/{aid}/questions").json() if q["id"] == q1["id"])
+    kept = next(p["answer_space"] for p in again["pages"] if p.get("answer_space"))
+    assert kept["manual"] and kept["top"] == 300.0  # re-reading the PDF keeps the hand-placed area
+
+    reset = c.delete(f"/api/v1/questions/{q1['id']}/answer-space").json()
+    back = next(p["answer_space"] for p in reset["pages"] if p.get("answer_space"))
+    assert not back.get("manual") and back["top"] == detected["top"]

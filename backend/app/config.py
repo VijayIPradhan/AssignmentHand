@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -19,9 +20,17 @@ class Settings(BaseSettings):
     # Database: PostgreSQL in production, SQLite is fine for local development and tests.
     database_url: str = "sqlite:///./data/app.db"
 
-    # Storage
-    storage_backend: str = "local"
+    # Storage: "local" (a directory; one server, or a shared volume) or an S3-compatible object store
+    # shared by every server: "r2" (Cloudflare R2) or "s3" (AWS S3, MinIO, ...).
+    storage_backend: Literal["local", "s3", "r2"] = "local"
     storage_root: Path = Path("./data/storage")
+    s3_bucket: str | None = None
+    s3_endpoint_url: str | None = None  # R2: https://<account_id>.r2.cloudflarestorage.com (EU: .eu.r2...)
+    r2_account_id: str | None = None  # R2 shortcut: builds the endpoint when S3_ENDPOINT_URL is empty
+    s3_region: str = "auto"  # R2 uses "auto"; AWS needs the bucket's region
+    s3_access_key_id: str | None = None  # R2: an API token's Access Key ID. Empty: the AWS credential chain
+    s3_secret_access_key: str | None = None
+    s3_prefix: str = ""  # optional folder inside the bucket (e.g. to share a bucket between environments)
 
     # Auth
     secret_key: str = Field(default="dev-insecure-change-me-0123456789abcdef", min_length=32)
@@ -46,6 +55,9 @@ class Settings(BaseSettings):
     job_poll_interval_s: float = 1.0
     job_stale_after_s: int = 900
     run_worker_in_process: bool = False
+    # Jobs each worker process runs at the same time (threads). Jobs mostly wait on the AI provider and
+    # storage, so a few per process use the machine well. SQLite always runs one at a time.
+    worker_concurrency: int = Field(2, ge=1, le=32)
 
     # Rate limiting (expensive endpoints), requests per minute per user
     rate_limit_generate_per_min: int = 10

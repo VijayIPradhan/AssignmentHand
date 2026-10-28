@@ -213,6 +213,16 @@ class QuestionOut(ORM):
     answer: AnswerOut | None = None
 
 
+class AnswerSpaceIn(BaseModel):
+    """An answer area on a page of the original PDF, in PDF points from the page's top-left corner."""
+
+    page: int = Field(ge=0, le=1000)
+    top: float = Field(ge=0)
+    bottom: float = Field(gt=0)
+    x0: float = Field(ge=0)
+    x1: float = Field(gt=0)
+
+
 class QuestionIn(BaseModel):
     number: str = Field("", max_length=32)
     text: str = Field(min_length=1, max_length=20_000)

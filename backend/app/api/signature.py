@@ -22,14 +22,14 @@ def get_signature(user: User = Depends(current_user)):
 
 
 @router.post("/signature", status_code=201)
-async def upload_signature(
+def upload_signature(
     file: UploadFile = File(..., description="Photo or scan of your own signature (JPG/PNG)"),
     rotate: float = Form(0, ge=-360, le=360),
     user: User = Depends(current_user),
 ):
     """Upload your signature. The paper background is removed and only the ink is kept. It is placed
     on signature lines only when you turn on "Sign the pages" for an assignment."""
-    data, mime, _ = await read_upload(file, {"image/png", "image/jpeg"})
+    data, mime, _ = read_upload(file, {"image/png", "image/jpeg"})
     try:
         meta = sig.save_signature(user.id, data, mime, EXT[mime], {"rotate": rotate} if rotate else None)
     except SampleImageError as exc:

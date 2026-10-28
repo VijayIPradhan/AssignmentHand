@@ -23,6 +23,35 @@ os.environ.update(
 )
 
 
+# TEST_STORAGE=s3 runs the whole suite against an in-memory S3 (moto) instead of a local directory, so
+# every upload, render and delete path is exercised through the S3/R2 backend too.
+if os.environ.get("TEST_STORAGE") == "s3":
+    os.environ.update(
+        {
+            "STORAGE_BACKEND": "s3",
+            "S3_BUCKET": "assignmenthand-test",
+            "S3_REGION": "us-east-1",
+            "S3_ENDPOINT_URL": "",
+            "S3_ACCESS_KEY_ID": "testing",
+            "S3_SECRET_ACCESS_KEY": "testing",
+            "S3_PREFIX": "suite",
+        }
+    )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _s3_storage():
+    if os.environ.get("TEST_STORAGE") != "s3":
+        yield
+        return
+    import boto3
+    from moto import mock_aws
+
+    with mock_aws():
+        boto3.client("s3", region_name="us-east-1").create_bucket(Bucket="assignmenthand-test")
+        yield
+
+
 class FakeProvider:
     """Deterministic stand-in for an LLM, safe under concurrent use (generation runs questions in
     parallel). Script it with ``responses`` (consumed in order) or, when the order across threads
@@ -64,6 +93,8 @@ class FakeProvider:
 def tmp_env(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{(tmp_path / 'test.db').as_posix()}")
     monkeypatch.setenv("STORAGE_ROOT", str(tmp_path / "storage"))
+    if os.environ.get("TEST_STORAGE") == "s3":
+        monkeypatch.setenv("S3_PREFIX", f"suite/{tmp_path.name}")  # each test its own folder in the bucket
     from app import config, db, ratelimit, storage
     from app.services import profiles
 
@@ -125,3 +156,15 @@ def template_library():
         ]
     )
     return res.library
+
+
+def stored_keys() -> list[str]:
+    """Every object key in the current storage backend (local directory or S3), for assertions."""
+    from app.storage import LocalStorage, S3Storage, get_storage
+
+    st = get_storage()
+    if isinstance(st, LocalStorage):
+        return [p.relative_to(st.root).as_posix() for p in st.root.rglob("*") if p.is_file()]
+    assert isinstance(st, S3Storage)
+    pages = st.client.get_paginator("list_objects_v2").paginate(Bucket=st.bucket, Prefix=st.prefix)
+    return [o["Key"][len(st.prefix) :] for page in pages for o in page.get("Contents", [])]

@@ -1,7 +1,11 @@
 import { Fragment } from "react";
+import { DiagramPreview } from "./DiagramPreview";
 import { cx } from "./ui";
 
-type Block = { kind: "text"; text: string } | { kind: "table"; header: string[] | null; rows: string[][] };
+type Block =
+  | { kind: "text"; text: string }
+  | { kind: "table"; header: string[] | null; rows: string[][] }
+  | { kind: "diagram"; src: string };
 
 const SEP = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
 
@@ -22,6 +26,13 @@ function parse(text: string): Block[] {
   };
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    if (/^```diagram/i.test(line.trim())) {
+      flush();
+      const body: string[] = [];
+      for (i++; i < lines.length && !lines[i].trim().startsWith("```"); i++) body.push(lines[i]);
+      out.push({ kind: "diagram", src: body.join("\n") });
+      continue;
+    }
     if (line.trim().startsWith("|") && line.includes("|", line.indexOf("|") + 1)) {
       const tbl: string[] = [];
       while (i < lines.length && lines[i].trim().startsWith("|")) tbl.push(lines[i++]);
@@ -43,14 +54,16 @@ function parse(text: string): Block[] {
   return out;
 }
 
-/** Plain text with pipe tables rendered as tables (as used in extracted questions and answers). */
+/** Plain text with pipe tables rendered as tables and ```diagram blocks previewed (questions and answers). */
 export function RichText({ text, className }: { text: string; className?: string }) {
   const blocks = parse(text);
   return (
     <div className={cx("prose-q text-[15px] leading-relaxed", className)}>
       {blocks.map((b, i) => (
         <Fragment key={i}>
-          {b.kind === "text" ? (
+          {b.kind === "diagram" ? (
+            <DiagramPreview src={b.src} />
+          ) : b.kind === "text" ? (
             b.text.trim() && <p className="whitespace-pre-wrap break-words">{b.text.replace(/^\n+|\n+$/g, "")}</p>
           ) : (
             <div className="overflow-x-auto">

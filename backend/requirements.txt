@@ -21,3 +21,4 @@ reportlab==5.1.0
 pytesseract==0.3.13
 httpx==0.28.1
 anthropic[bedrock]==2.3.0
+boto3==1.43.119  # S3-compatible file storage (Cloudflare R2)

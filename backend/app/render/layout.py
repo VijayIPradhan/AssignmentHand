@@ -24,6 +24,7 @@ from app.render.engine import (
     shift_item,
 )
 from app.render.markup import (
+    Diagram,
     DisplayMath,
     Figure,
     Heading,
@@ -52,6 +53,15 @@ class AnswerSpace:
     left: float
     # Bands (top, bottom) in mm inside the space that hold printed text (e.g. "[10 Marks]") - not written over
     blocked: list[tuple[float, float]] = field(default_factory=list)
+    # Right edge (mm) of an area the user placed by hand; None: up to the page margin. A hand-placed area
+    # is used exactly (its left edge is not pushed in to the page margin either).
+    right: float | None = None
+
+    def edges(self, page_w: float, m) -> tuple[float, float]:
+        """(left, right) in mm of the writing area on a page of width ``page_w`` with margins ``m``."""
+        if self.right is not None:
+            return self.left, self.right
+        return max(m.left, self.left), page_w - m.right
 
 
 @dataclass
@@ -436,7 +446,22 @@ class Layouter:
         elif isinstance(blk, Figure):
             data = sec.figures[blk.index - 1] if 0 < blk.index <= len(sec.figures) else None
             lines += self._figure_lines(data, blk.index)
+        elif isinstance(blk, Diagram):
+            lines += self._diagram_lines(blk, rng)
         return lines
+
+    def _diagram_lines(self, blk: Diagram, rng: random.Random) -> list[Line]:
+        from app.render.diagram import DiagramDrawer, DiagramError, parse_spec
+
+        try:
+            spec = parse_spec(blk.src)
+        except DiagramError as exc:
+            self._warn("diagram_invalid", f"A diagram could not be drawn: {exc}")
+            return []
+        run = DiagramDrawer(self.e, rng, self.text_w, self.s.variation).plot(spec)
+        if run.width > self.text_w:
+            run = _scaled(run, self.text_w / run.width)
+        return [Line(run, max(0.0, (self.text_w - run.width) / 2), self._new_block())]
 
     # ---------------------------------------------------------------- pagination
 
@@ -619,8 +644,8 @@ class Layouter:
             sp = sec.space
             host = src[sp.page] if sp is not None and sp.page < len(src) else None
             ref = host or (src[-1] if src else self._blank_page(0))
-            left = max(m.left, sp.left) if sp is not None else m.left
-            self.text_w = ref.width - left - m.right
+            left, right = sp.edges(ref.width, m) if sp is not None else (m.left, ref.width - m.right)
+            self.text_w = right - left
             scale = 1.0
             while True:
                 self.e.set_size(base_size * scale)

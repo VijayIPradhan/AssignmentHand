@@ -211,18 +211,28 @@ def drain(max_jobs: int = 100) -> int:
     return n
 
 
-def loop(stop: threading.Event | None = None) -> None:
+def concurrency() -> int:
+    s = get_settings()
+    return 1 if s.database_url.startswith("sqlite") else s.worker_concurrency
+
+
+def loop(stop: threading.Event | None = None, housekeeping: bool = True) -> None:
+    """Claim and run jobs until stopped. One loop per thread; only one thread does housekeeping."""
     s = get_settings()
     last_stale = last_purge = 0.0
-    log.info("worker started", extra={"worker": WORKER_ID})
+    if housekeeping:
+        log.info("worker started", extra={"worker": WORKER_ID, "concurrency": concurrency()})
     while stop is None or not stop.is_set():
         _heartbeat["at"] = time.time()
         try:
-            if time.monotonic() - last_stale > 60:
+            if housekeeping and time.monotonic() - last_stale > 60:
+                from app.ratelimit import purge as purge_rate_limits
+
                 with session_factory()() as db:
                     requeue_stale(db)
+                purge_rate_limits()
                 last_stale = time.monotonic()
-            if s.retention_days > 0 and time.monotonic() - last_purge > 3600:
+            if housekeeping and s.retention_days > 0 and time.monotonic() - last_purge > 3600:
                 from app.services.retention import purge_expired
 
                 with session_factory()() as db:
@@ -237,9 +247,15 @@ def loop(stop: threading.Event | None = None) -> None:
             time.sleep(min(10.0, s.job_poll_interval_s * 5))
 
 
+def _start_threads(stop: threading.Event, n: int, housekeeper: bool) -> None:
+    for i in range(n):
+        args = (stop, housekeeper and i == 0)
+        threading.Thread(target=loop, args=args, name=f"job-worker-{i + 1}", daemon=True).start()
+
+
 def start_in_process() -> threading.Event:
     stop = threading.Event()
-    threading.Thread(target=loop, args=(stop,), name="job-worker", daemon=True).start()
+    _start_threads(stop, concurrency(), housekeeper=True)
     return stop
 
 
@@ -247,7 +263,12 @@ def main() -> None:
     from app.logging_setup import configure_logging
 
     configure_logging(get_settings().log_level)
-    loop()
+    stop = threading.Event()
+    _start_threads(stop, concurrency() - 1, housekeeper=False)  # the main thread does the housekeeping
+    try:
+        loop(stop, housekeeping=True)
+    finally:
+        stop.set()
 
 
 if __name__ == "__main__":

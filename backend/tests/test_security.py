@@ -100,9 +100,11 @@ def test_validation_errors_are_structured(auth_client):
 def test_account_deletion_removes_all_files(auth_client, tmp_env):
     auth_client.post("/api/v1/assignments", files={"file": ("a.pdf", assignment_pdf())})
     run_jobs()
-    assert any((tmp_env / "storage" / "users").rglob("*.pdf"))
+    from tests.conftest import stored_keys
+
+    assert any(k.startswith("users/") and k.endswith(".pdf") for k in stored_keys())
     assert auth_client.delete("/api/v1/auth/me").status_code == 204
-    assert not any((tmp_env / "storage" / "users").rglob("*"))
+    assert not any(k.startswith("users/") for k in stored_keys())
 
 
 def test_health_endpoints(client):

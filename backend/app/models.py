@@ -345,6 +345,18 @@ class LLMUsage(Base):
     )
 
 
+class RateLimitHit(Base):
+    """One request counted by the rate limiter. Shared by every API process and server."""
+
+    __tablename__ = "rate_limit_hits"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    key: Mapped[str] = mapped_column(String(200), nullable=False)  # "<bucket>:<user id, email or IP>"
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    __table_args__ = (Index("ix_rate_limit_hits_key_at", "key", "at"),)
+
+
 __all__ = [
     "AnswerStatus",
     "Assignment",
@@ -357,6 +369,7 @@ __all__ = [
     "LLMUsage",
     "ProcessingJob",
     "ProfileStatus",
+    "RateLimitHit",
     "RenderConfiguration",
     "RenderedDocument",
     "SampleStatus",

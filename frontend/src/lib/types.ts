@@ -141,11 +141,22 @@ export type DocumentInfo = Omit<S["DocumentOut"], "pages"> & {
   pages: DocPage[];
 };
 
+/** Where an answer is written on the original page, in PDF points from the top-left corner. */
+export interface AnswerSpace {
+  page: number;
+  top: number;
+  bottom: number;
+  x0: number;
+  x1?: number; // only on hand-placed areas
+  fraction?: number;
+  manual?: boolean; // placed by the user in the answer area editor
+}
+
 export interface QuestionPageRef {
   page: number;
   y0: number;
   y1: number;
-  answer_space?: { page: number; top?: number; bottom?: number; left?: number };
+  answer_space?: AnswerSpace;
 }
 
 export interface FigureRef {

@@ -38,9 +38,7 @@ def ready(db: Session = Depends(get_db)):
         checks["database"] = "error"
         ok = False
     try:
-        st = get_storage()
-        st.put("health/probe", b"ok")
-        st.delete("health/probe")
+        get_storage().check()
         checks["storage"] = "ok"
     except Exception:
         checks["storage"] = "error"

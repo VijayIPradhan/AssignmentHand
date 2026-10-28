@@ -1801,6 +1801,100 @@
     }
    }
   },
+  "/api/v1/questions/{qid}/answer-space": {
+   "put": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Set Answer Space",
+    "description": "Place this question's answer area on a page of the original PDF by hand.",
+    "operationId": "set_answer_space_api_v1_questions__qid__answer_space_put",
+    "parameters": [
+     {
+      "name": "qid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Qid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AnswerSpaceIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/QuestionOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "tags": [
+     "assignments"
+    ],
+    "summary": "Reset Answer Space",
+    "description": "Go back to the answer area found when the PDF was read.",
+    "operationId": "reset_answer_space_api_v1_questions__qid__answer_space_delete",
+    "parameters": [
+     {
+      "name": "qid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Qid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/QuestionOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/v1/assignments/{aid}/questions/reorder": {
    "post": {
     "tags": [
@@ -3182,6 +3276,46 @@
     },
     "type": "object",
     "title": "AnswerPrefsIn"
+   },
+   "AnswerSpaceIn": {
+    "properties": {
+     "page": {
+      "type": "integer",
+      "maximum": 1000.0,
+      "minimum": 0.0,
+      "title": "Page"
+     },
+     "top": {
+      "type": "number",
+      "minimum": 0.0,
+      "title": "Top"
+     },
+     "bottom": {
+      "type": "number",
+      "exclusiveMinimum": 0.0,
+      "title": "Bottom"
+     },
+     "x0": {
+      "type": "number",
+      "minimum": 0.0,
+      "title": "X0"
+     },
+     "x1": {
+      "type": "number",
+      "exclusiveMinimum": 0.0,
+      "title": "X1"
+     }
+    },
+    "type": "object",
+    "required": [
+     "page",
+     "top",
+     "bottom",
+     "x0",
+     "x1"
+    ],
+    "title": "AnswerSpaceIn",
+    "description": "An answer area on a page of the original PDF, in PDF points from the page's top-left corner."
    },
    "AnswerUpdate": {
     "properties": {
