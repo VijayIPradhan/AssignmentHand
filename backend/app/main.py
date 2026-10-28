@@ -95,7 +95,7 @@ def _log_startup(s) -> None:
         extra={
             "env": s.app_env,
             "database": s.database_url.split(":", 1)[0],
-            "storage": f"{s.storage_backend}:{s.storage_root}",
+            "storage": f"{s.storage_backend}:{s.storage_root if s.storage_backend == 'local' else s.s3_bucket}",
             "worker_in_process": s.run_worker_in_process,
             "ai_provider": ai["provider"],
             "ai_configured": ai["configured"],

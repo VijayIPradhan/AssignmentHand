@@ -604,8 +604,12 @@ def rendered_page(rid: str, n: int, user: User = Depends(current_user), db: Sess
 def download(rid: str, inline: bool = False, user: User = Depends(current_user), db: Session = Depends(get_db)):
     r = owned_rendered(db, rid, user)
     a = db.get(Assignment, r.assignment_id)
-    suffix = {"handwritten": "handwritten", "digital": "typed", "review": "review"}.get(r.kind, r.kind)
-    name = safe_filename(f"{a.title} - {suffix}{' (preview)' if r.is_preview else ''}.pdf")
+    preview = " (preview)" if r.is_preview else ""
+    if r.kind == "handwritten":  # the file to hand in: just the title marked _H
+        name = safe_filename(f"{a.title}_H{preview}.pdf")
+    else:
+        suffix = {"digital": "typed", "review": "review"}.get(r.kind, r.kind)
+        name = safe_filename(f"{a.title} - {suffix}{preview}.pdf")
     if not r.is_preview:
         r.downloaded_at = utcnow()
         db.commit()

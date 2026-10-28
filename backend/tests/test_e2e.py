@@ -91,6 +91,7 @@ def test_full_workflow(auth_client, fake_llm):
     reader = PdfReader(io.BytesIO(pdf.content))
     assert len(reader.pages) == final["page_count"]
     assert "attachment" in pdf.headers["content-disposition"]
+    assert pdf.headers["content-disposition"].endswith('_H.pdf"')  # no " - handwritten" suffix
 
     # Typed export and review copy
     for kind in ("digital", "review"):
