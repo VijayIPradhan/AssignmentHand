@@ -27,6 +27,12 @@ The API container runs `alembic upgrade head` before starting. Health checks:
   missing from profiles, mount a font that permits embedding and set `FALLBACK_FONT_PATH`.
 - **Secrets** come only from the environment; never bake them into images or commit `.env`.
 
+## Logs
+
+In Docker the app writes no log files: everything goes to stdout as one JSON object per line. Read it with
+`docker compose logs -f api worker`, or in Dokploy's **Logs** tab. (Outside Docker, `LOG_DIR` keeps rotating JSON
+files; leave it empty to disable them.)
+
 ## Backups
 
 - Database: `docker compose exec db pg_dump -U assignmenthand assignmenthand > backup.sql`
@@ -55,6 +61,21 @@ Both contain private user data - encrypt backups and restrict access.
 4. Moving an existing install: stop the app, then copy the files once (re-runnable; it skips what is already
    there): `docker compose run --rm worker python -m app.storage.copy --from /data/storage` (add `--dry-run` to
    count first). Start the app; `GET /api/v1/health/ready` reports `storage: ok` when the bucket is reachable.
+
+## Moving an existing install to a server (e.g. Dokploy)
+
+Files live in the storage (R2), so a server using the same bucket already has them. The database moves once:
+
+1. Upload a snapshot of the old database to the bucket (from the old machine, with the app stopped):
+   `python -c "import sqlite3; s=sqlite3.connect('data/app.db'); d=sqlite3.connect('snap.db'); s.backup(d)"`, then
+   put `snap.db` at `migration/app.db` in the bucket (any S3 tool, or `get_storage().put(...)`).
+2. Dokploy: create a **Compose** service from this repository (compose file `docker-compose.yml`), paste the
+   settings into its **Environment** tab, and add a domain on service `web`, port `3000` (HTTPS on).
+3. Deploy. The API applies the schema to the new PostgreSQL on start.
+4. In Dokploy, open a terminal in the `api` container and import:
+   `python -m app.db_copy --from-storage migration/app.db`. It refuses to run if the database already has users
+   (`--replace` empties it first) and checks every table's row count afterwards.
+5. Log in with the same email and password, then delete `migration/app.db` from the bucket.
 
 ## Without Docker
 

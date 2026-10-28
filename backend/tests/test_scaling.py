@@ -48,19 +48,24 @@ def test_s3_delete_prefix_removes_only_that_folder_beyond_one_page(s3):
 def test_r2_settings_build_the_account_endpoint(monkeypatch):
     from app.config import Settings
 
-    for name in ("S3_REGION", "S3_ENDPOINT_URL", "S3_PREFIX", "S3_BUCKET", "STORAGE_BACKEND"):
+    for name in ("S3_REGION", "S3_ENDPOINT_URL", "S3_PREFIX", "S3_BUCKET", "STORAGE_BACKEND", "R2_ACCOUNT_ID"):
         monkeypatch.delenv(name, raising=False)  # independent of TEST_STORAGE=s3
     s = Settings(
-        storage_backend="r2", s3_bucket="files", r2_account_id="abc123", s3_access_key_id="k", s3_secret_access_key="s"
+        _env_file=None,
+        storage_backend="r2",
+        s3_bucket="files",
+        r2_account_id="abc123",
+        s3_access_key_id="k",
+        s3_secret_access_key="s",
     )
     st = storage_from_settings(s)
     assert isinstance(st, S3Storage)
     assert st.client.meta.endpoint_url == "https://abc123.r2.cloudflarestorage.com"
     assert st.client.meta.region_name == "auto"
     with pytest.raises(RuntimeError, match="R2_ACCOUNT_ID"):
-        storage_from_settings(Settings(storage_backend="r2", s3_bucket="files"))
+        storage_from_settings(Settings(_env_file=None, storage_backend="r2", s3_bucket="files"))
     with pytest.raises(RuntimeError, match="S3_BUCKET"):
-        storage_from_settings(Settings(storage_backend="s3"))
+        storage_from_settings(Settings(_env_file=None, storage_backend="s3"))
 
 
 def test_copy_local_files_into_the_bucket_is_resumable(s3, tmp_path):
@@ -164,3 +169,28 @@ def test_parallel_workers_never_run_a_job_twice(tmp_env):
     for t in threads:
         t.join()
     assert len(claimed) == 8 and len(set(claimed)) == 8
+
+
+def test_database_copy_moves_every_row_and_refuses_to_merge(tmp_env, auth_client, tmp_path):
+    from sqlalchemy import create_engine, func, select
+
+    from app import db as appdb
+    from app.db import Base
+    from app.db_copy import copy_database
+    from tests.conftest import run_jobs
+    from tests.pdfs import assignment_pdf
+
+    auth_client.post("/api/v1/assignments", files={"file": ("a.pdf", assignment_pdf())})
+    run_jobs()
+    source_url = str(appdb.get_engine().url)
+    target_url = f"sqlite:///{(tmp_path / 'target.db').as_posix()}"
+    target = create_engine(target_url)
+    Base.metadata.create_all(target)  # an empty database with the latest schema, like a new server
+    counts = copy_database(source_url, target)
+    assert counts["users"] == 1 and counts["assignments"] == 1 and counts["extracted_questions"] >= 1
+    with target.connect() as c:
+        for t in Base.metadata.sorted_tables:
+            assert c.execute(select(func.count()).select_from(t)).scalar() == counts[t.name]
+    with pytest.raises(SystemExit, match="already has 1 user"):
+        copy_database(source_url, target)  # never merged twice by accident
+    assert copy_database(source_url, target, replace=True)["users"] == 1

@@ -19,6 +19,14 @@ os.environ.update(
         "LOG_DIR": "",  # tests never write to the developer's log files
         "LOG_FORMAT": "json",
         "LLM_MIN_LENGTH_RATIO": "0",  # scripted fake answers are short; the rule has its own test
+        # Never the developer's real file storage (backend/.env may point at a Cloudflare R2 bucket).
+        "STORAGE_BACKEND": "local",
+        "S3_BUCKET": "",
+        "R2_ACCOUNT_ID": "",
+        "S3_ENDPOINT_URL": "",
+        "S3_ACCESS_KEY_ID": "",
+        "S3_SECRET_ACCESS_KEY": "",
+        "AWS_BEARER_TOKEN_BEDROCK": "",
     }
 )
 

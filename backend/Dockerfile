@@ -22,7 +22,10 @@ COPY alembic.ini ./
 RUN useradd --create-home --uid 10001 appuser && mkdir -p /data && chown appuser /data
 USER appuser
 
-ENV STORAGE_ROOT=/data/storage
+# Files go under /data (the only directory the app user may write to). Logs go to stdout only, where
+# Docker / Dokploy collect them: no log files in the container.
+ENV STORAGE_ROOT=/data/storage \
+    LOG_DIR=
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s CMD curl -fsS http://localhost:8000/api/v1/health || exit 1
 
