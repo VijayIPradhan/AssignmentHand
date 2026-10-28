@@ -58,7 +58,7 @@ services:
     environment:
       BACKEND_URL: http://api:8000
     ports:
-      - "3000:3000"
+      - "3333:3000" # host port 3333; inside the network the web service listens on 3000
     depends_on:
       api:
         condition: service_healthy

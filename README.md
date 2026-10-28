@@ -45,7 +45,7 @@ API docs (OpenAPI/Swagger): http://localhost:8000/api/docs - also exported to `d
 ```bash
 cp .env.example .env    # set SECRET_KEY, POSTGRES_PASSWORD, AI provider settings
 docker compose up --build
-# web: http://localhost:3000   (api, worker and postgres run on the internal network)
+# web: http://localhost:3333   (api, worker and postgres run on the internal network)
 ```
 
 Services: `db` (PostgreSQL 17), `api` (FastAPI; runs `alembic upgrade head` on start), `worker`
