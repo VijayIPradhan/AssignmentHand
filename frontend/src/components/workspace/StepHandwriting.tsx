@@ -187,6 +187,7 @@ function SettingsForm({ initial, hasSource }: { initial: RenderSettings; hasSour
     char_spacing: s.char_spacing,
     word_spacing: s.word_spacing,
     variation: s.variation,
+    letter_style: s.letter_style ?? "auto",
     ink_color: s.ink_color,
   };
 
@@ -316,6 +317,7 @@ function SettingsForm({ initial, hasSource }: { initial: RenderSettings; hasSour
 
       <Sheet title="Handwriting style" description="Starts from the profile’s saved style; changes here apply to this assignment only.">
         <StyleControls
+          autoLabel="Same as the handwriting profile"
           value={style}
           onChange={(v) => {
             setS((prev) => ({ ...prev, ...v }));

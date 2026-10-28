@@ -156,6 +156,7 @@ class GlyphLibrary:
     letter_gap_ratio: float = 0.18  # gap between letters / x-height
     word_gap_ratio: float = 0.9  # gap between words / x-height
     line_spacing_ratio: float = 3.2  # baseline-to-baseline / x-height (freeform only)
+    joined_writing: bool = False  # the free-form samples were written joined (cursive)
 
     def add(self, g: Glyph) -> None:
         lst = self.glyphs.setdefault(g.char, [])
@@ -203,6 +204,7 @@ class GlyphLibrary:
             "letter_gap_ratio": round(self.letter_gap_ratio, 3),
             "word_gap_ratio": round(self.word_gap_ratio, 3),
             "line_spacing_ratio": round(self.line_spacing_ratio, 3),
+            "joined_writing": self.joined_writing,
             "glyph_count": sum(len(v) for v in self.glyphs.values()),
             "char_count": len(self.glyphs),
         }
@@ -230,6 +232,7 @@ class GlyphLibrary:
             letter_gap_ratio=m["letter_gap_ratio"],
             word_gap_ratio=m["word_gap_ratio"],
             line_spacing_ratio=m.get("line_spacing_ratio", 3.2),
+            joined_writing=bool(m.get("joined_writing", False)),
         )
         for ch, lst in d["glyphs"].items():
             lib.glyphs[ch] = [Glyph.from_json(ch, gd) for gd in lst]

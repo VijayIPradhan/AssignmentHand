@@ -518,6 +518,8 @@ def effective_settings(
         k: v for k, v in ((a.render_config.settings if a.render_config else {}) or {}).items() if not k.startswith("_")
     }
     base = style_from(profile) if profile else {}
+    if stored.get("letter_style") == "auto":
+        del stored["letter_style"]  # same as the profile
     s = RenderSettings.model_validate({**base, **stored, **(overrides or {})})
     if s.sign_fields is None:
         from app.services.signature import signature_meta

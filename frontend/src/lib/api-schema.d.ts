@@ -1691,6 +1691,12 @@ export interface components {
              */
             variation: number;
             /**
+             * Letter Style
+             * @default auto
+             * @enum {string}
+             */
+            letter_style: "auto" | "joined" | "separate";
+            /**
              * Paragraph Indent Mm
              * @default 6
              */
@@ -1875,6 +1881,8 @@ export interface components {
             word_spacing?: number | null;
             /** Variation */
             variation?: number | null;
+            /** Letter Style */
+            letter_style?: ("auto" | "joined" | "separate") | null;
             /** Ink Color */
             ink_color?: string | null;
         };

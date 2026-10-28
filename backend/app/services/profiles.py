@@ -208,6 +208,7 @@ def style_from(profile: HandwritingProfile, overrides: dict | None = None) -> di
         "char_spacing": 1.0,
         "word_spacing": 1.0,
         "variation": 0.5,
+        "letter_style": "auto",
         "ink_color": "#1b2a6b",
     }
     base.update({k: v for k, v in (profile.style or {}).items() if k in base})
@@ -226,8 +227,14 @@ def engine_for(lib: GlyphLibrary, s: RenderSettings) -> GlyphCompositingEngine:
             char_spacing=s.char_spacing,
             word_spacing=s.word_spacing,
             variation=s.variation,
+            joined=joined_letters(lib, s),
         ),
     )
+
+
+def joined_letters(lib: GlyphLibrary, s: RenderSettings) -> bool:
+    """Resolve the letter style: an explicit choice wins, "auto" follows how the samples were written."""
+    return {"joined": True, "separate": False}.get(s.letter_style, lib.joined_writing)
 
 
 def preview_png(

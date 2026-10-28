@@ -31,7 +31,9 @@ LONG = "\n\n".join(
 
 def _layout(lib, answers, **kw):
     s = RenderSettings(**kw)
-    eng = GlyphCompositingEngine(lib, EngineStyle(x_height_mm=s.handwriting_size_mm, variation=s.variation))
+    eng = GlyphCompositingEngine(
+        lib, EngineStyle(x_height_mm=s.handwriting_size_mm, variation=s.variation, joined=s.letter_style == "joined")
+    )
     secs = [SectionInput(f"q{i}", str(i + 1), f"Question {i + 1}?", a) for i, a in enumerate(answers)]
     return s, Layouter(eng, s).run(secs)
 
@@ -180,3 +182,87 @@ def test_answers_skip_printed_marks_labels(template_library):
         bottom = g.y - g.glyph.bottom_mm * g.scale
         assert not (top < band[1] and bottom > band[0]), "handwriting overlaps the printed marks label"
     assert min(g.y for g in _glyphs(res.pages[0])) < band[0]  # writing starts above the label
+
+
+def _engine(lib, joined):
+    return GlyphCompositingEngine(lib, EngineStyle(x_height_mm=3.0, variation=0.5, joined=joined))
+
+
+def test_joined_writing_connects_letters_within_words_only(template_library):
+    import random
+
+    printed = _engine(template_library, False).shape("minimum ok", random.Random(3))
+    assert not any(isinstance(it, LineItem) for it in printed.items)
+    run = _engine(template_library, True).shape("minimum ok", random.Random(3))
+    glyphs = [it for it in run.items if isinstance(it, GlyphItem)]
+    joins = [it for it in run.items if isinstance(it, LineItem)]
+    assert len(glyphs) == 9
+    assert 5 <= len(joins) <= 7  # "minimum": 6 joins, "ok": 1; never across the space
+    ok_start, xh = glyphs[7].x, 3.0
+    for ln in joins:
+        xs = [p[0] for p in ln.pts]
+        assert not min(xs) < ok_start < max(xs)  # never across the word gap
+        assert all(-1.2 * xh <= p[1] <= 0.3 * xh for p in ln.pts)  # within the x-height band
+        assert 0.05 < ln.width < 1.0
+
+
+def test_joined_writing_skips_capitals_digits_and_punctuation(template_library):
+    import random
+
+    run = _engine(template_library, True).shape("A1.B", random.Random(1))
+    assert not any(isinstance(it, LineItem) for it in run.items)
+
+
+def test_joined_render_is_reproducible(template_library):
+    a = render_pdf(
+        _layout(template_library, ["Joined writing flows."], letter_style="joined")[1],
+        RenderSettings(letter_style="joined"),
+    )
+    b = render_pdf(
+        _layout(template_library, ["Joined writing flows."], letter_style="joined")[1],
+        RenderSettings(letter_style="joined"),
+    )
+    assert a == b
+
+
+def test_letters_are_normalised_to_a_common_size(template_library):
+    import dataclasses
+    import random
+
+    import cv2
+
+    g = template_library.variants("o")[0]
+    big = dataclasses.replace(g, bitmap=cv2.resize(g.bitmap, None, fx=1.25, fy=1.25), baseline_px=g.baseline_px * 1.25)
+    eng = _engine(template_library, False)
+    k_ref = eng._glyph_run(g, random.Random(0), 1.0).items[0].scale
+    k_big = eng._glyph_run(big, random.Random(0), 1.0).items[0].scale
+    assert abs(k_big * big.top_mm - k_ref * g.top_mm) < 0.08 * k_ref * g.top_mm
+
+
+def test_letter_style_choice_resolves_assignment_then_profile_then_samples(template_library):
+    from types import SimpleNamespace
+
+    from app.services.assignments import effective_settings
+    from app.services.profiles import joined_letters
+
+    lib = template_library
+    for style, detected, want in [
+        ("auto", True, True),
+        ("auto", False, False),
+        ("separate", True, False),
+        ("joined", False, True),
+    ]:
+        lib.joined_writing = detected
+        assert joined_letters(lib, RenderSettings(letter_style=style)) is want
+    lib.joined_writing = False
+
+    def settings(profile_style, assignment_style):
+        prof = SimpleNamespace(style={"letter_style": profile_style} if profile_style else {}, metrics={})
+        cfg = SimpleNamespace(settings={"letter_style": assignment_style} if assignment_style else {})
+        a = SimpleNamespace(render_config=cfg, user_id="u")
+        return effective_settings(a, prof, {"sign_fields": False}).letter_style
+
+    assert settings(None, None) == "auto"
+    assert settings("joined", None) == "joined"
+    assert settings("joined", "auto") == "joined"  # an assignment on "auto" follows its profile
+    assert settings("joined", "separate") == "separate"

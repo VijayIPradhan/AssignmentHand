@@ -4666,6 +4666,16 @@
       "title": "Variation",
       "default": 0.5
      },
+     "letter_style": {
+      "type": "string",
+      "enum": [
+       "auto",
+       "joined",
+       "separate"
+      ],
+      "title": "Letter Style",
+      "default": "auto"
+     },
      "paragraph_indent_mm": {
       "type": "number",
       "maximum": 40.0,
@@ -5109,6 +5119,22 @@
        }
       ],
       "title": "Variation"
+     },
+     "letter_style": {
+      "anyOf": [
+       {
+        "type": "string",
+        "enum": [
+         "auto",
+         "joined",
+         "separate"
+        ]
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Letter Style"
      },
      "ink_color": {
       "anyOf": [

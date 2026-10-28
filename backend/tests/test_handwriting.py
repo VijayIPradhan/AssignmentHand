@@ -244,3 +244,43 @@ def test_letter_verification_is_cached_per_profile(tmp_env):
     # Everything cached: no model call at all
     cached_verify(p, {"a": [g("a", 255)]}, verify, lambda *_: None)
     assert calls == [2, 1]
+
+
+def test_filled_loops_are_dropped_when_an_open_variant_exists():
+    import cv2
+    import numpy as np
+
+    from app.handwriting.glyphs import Glyph, GlyphLibrary
+    from app.handwriting.profile_builder import _drop_filled, has_counter
+
+    ring = np.zeros((40, 40), np.uint8)
+    cv2.circle(ring, (20, 20), 14, 255, 4)
+    blob = np.zeros((40, 40), np.uint8)
+    cv2.circle(blob, (20, 20), 14, 255, -1)
+    assert has_counter(Glyph("o", ring, 10, 38)) and not has_counter(Glyph("o", blob, 10, 38))
+    lib = GlyphLibrary()
+    lib.add(Glyph("o", ring, 10, 38))
+    lib.add(Glyph("o", blob, 10, 38))
+    lib.add(Glyph("e", blob.copy(), 10, 38))
+    assert _drop_filled(lib) == ["e"]  # only filled variants: kept, and reported
+    assert len(lib.variants("o")) == 1 and has_counter(lib.variants("o")[0])
+    assert len(lib.variants("e")) == 1
+
+
+def test_clean_glyph_removes_stray_specks_and_sits_letters_on_the_baseline():
+    import numpy as np
+
+    from app.handwriting.glyphs import Glyph
+    from app.handwriting.profile_builder import clean_glyph
+
+    bmp = np.zeros((60, 40), np.uint8)
+    bmp[25:55, 5:35] = 255  # the letter body
+    bmp[2:5, 2:5] = 255  # a neighbour's i-dot caught in the cut
+    g = Glyph("n", bmp, 10.0, 50.0)  # baseline 5 px above the ink bottom
+    assert clean_glyph(g)
+    assert g.bitmap.shape[0] < 40  # the speck is gone and the bitmap re-cropped
+    ink_bottom = np.nonzero((g.bitmap > 127).any(axis=1))[0].max() + 1
+    assert g.baseline_px == ink_bottom
+    i = Glyph("i", bmp.copy(), 10.0, 55.0)  # an i keeps its dot
+    clean_glyph(i)
+    assert i.bitmap.shape == (60, 40)

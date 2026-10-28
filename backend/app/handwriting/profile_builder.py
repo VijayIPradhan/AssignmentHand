@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from app.handwriting.charset import DIGITS, LOWER, UPPER
-from app.handwriting.glyphs import GlyphLibrary
+from app.handwriting.glyphs import GlyphLibrary, crop_to_ink
 from app.handwriting.preprocess import (
     SampleImageError,
     apply_corrections,
@@ -19,6 +19,7 @@ from app.handwriting.segment import SegmentResult, TemplateNotFound, analyze_fre
 
 DEFAULT_X_HEIGHT_MM = 3.0
 ESSENTIAL_PUNCT = ".,;:!?'()-"
+POOR_PHOTO = ("image looks blurry", "low resolution")
 
 
 @dataclass
@@ -138,6 +139,83 @@ def centre_mid_height_marks(lib: GlyphLibrary) -> None:
             g._outlines.clear()
 
 
+LOOPED = "abdegopq"  # letters drawn around an open counter (the eye of an e, the bowl of a, o, p ...)
+
+
+def has_counter(g) -> bool:
+    """True if the glyph's loop is open: its ink encloses a hole of a visible size."""
+    import cv2
+
+    m = (g.bitmap > 127).astype(np.uint8)
+    contours, hier = cv2.findContours(m, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+    if hier is None:
+        return False
+    min_area = max(4.0, 0.004 * m.size)
+    return any(h[3] >= 0 and cv2.contourArea(c) >= min_area for c, h in zip(contours, hier[0], strict=True))
+
+
+def _drop_filled(lib: GlyphLibrary) -> list[str]:
+    """Drop variants of looped letters whose loop is filled in (ink blob from a blurry photo or a thick
+    pen) when an open variant exists. Returns the letters that only have filled variants."""
+    only_filled = []
+    for ch in LOOPED:
+        variants = lib.variants(ch)
+        if not variants:
+            continue
+        open_ = [g for g in variants if has_counter(g)]
+        if open_:
+            lib.glyphs[ch] = open_
+        else:
+            only_filled.append(ch)
+    return only_filled
+
+
+MULTI_PART = set('ij:;!?"%=÷≈≠')  # characters whose small separate marks belong to them
+ON_LINE = set("acemnorsuvwxbdhklt") | set("ABCDEFGHIKLMNOPRSTUVWXYZ") | set("0123568")  # no descender
+
+
+def clean_glyph(g) -> bool:
+    """Tidy a cut-out letter in place; True if it changed.
+
+    Removes small separate specks (a neighbour's i-dot or comma caught in the cut) from letters that
+    have no separate marks of their own, and sits letters without descenders on the baseline (the line
+    estimate on a photo can be off by a few pixels)."""
+    import cv2
+
+    changed = False
+    bmp = g.bitmap
+    if g.char not in MULTI_PART:
+        n, labels, stats, _ = cv2.connectedComponentsWithStats((bmp > 127).astype(np.uint8), connectivity=8)
+        if n > 2:
+            areas = stats[1:, cv2.CC_STAT_AREA]
+            total = float(areas.sum())
+            main = 1 + int(np.argmax(areas))
+            mx, my, mw, mh = stats[main, :4]
+            keep = np.zeros(n, bool)
+            keep[main] = True
+            for i in range(1, n):
+                x, y, w, h, a = stats[i]
+                near = x < mx + mw * 1.1 and x + w > mx - mw * 0.1 and y < my + mh and y + h > my
+                keep[i] = keep[i] or a >= 0.08 * total or near
+            if not keep[1:].all():
+                cropped = crop_to_ink(np.where(keep[labels], bmp, 0).astype(np.uint8))
+                if cropped is not None:
+                    bmp, oy, _ox = cropped
+                    g.bitmap = bmp
+                    g.baseline_px -= oy
+                    changed = True
+    if g.char in ON_LINE:
+        rows = np.nonzero((bmp > 127).any(axis=1))[0]
+        if len(rows):
+            ink_bottom = rows.max() + 1
+            if abs(ink_bottom - g.baseline_px) > 0.06 * bmp.shape[0]:
+                g.baseline_px = float(ink_bottom)
+                changed = True
+    if changed:
+        g._outlines.clear()
+    return changed
+
+
 def _drop_outliers(lib: GlyphLibrary) -> list[str]:
     dropped = []
     for ch, variants in list(lib.glyphs.items()):
@@ -158,6 +236,7 @@ def build_library(samples: list[SampleInput], verifier=None) -> BuildResult:
     outcomes: list[SampleOutcome] = []
     templates: list[SegmentResult] = []
     freeforms: list[SegmentResult] = []
+    poor: set[str] = set()  # samples whose photo is blurry or low resolution
     for s in samples:
         try:
             seg, quality = _process_one(s)
@@ -165,6 +244,8 @@ def build_library(samples: list[SampleInput], verifier=None) -> BuildResult:
             seg, quality = None, {"issues": [f"fatal:{exc}"], "ok": False}
         png = encode_png(seg.processed) if seg is not None and seg.processed is not None else None
         outcomes.append(SampleOutcome(s.id, "processed" if seg else "rejected", quality, png))
+        if any(i.startswith(POOR_PHOTO) for i in quality.get("issues", [])):
+            poor.add(s.id)
         if seg is not None:
             (templates if s.kind == "template" else freeforms).append(seg)
 
@@ -184,11 +265,16 @@ def build_library(samples: list[SampleInput], verifier=None) -> BuildResult:
         for g in seg.glyphs:
             g.px_per_mm = (g.x_height_px or xh_px) / lib.x_height_mm
             ff_by_char.setdefault(g.char, []).append(g)
+
     # A letter written on its own is far more reliable than one cut out of a joined word: when a
-    # character has separately written samples, the automatically sliced ones are not used.
+    # character has usable separately written samples (sharp photo, loop open), the automatically
+    # sliced ones are not used. Otherwise the sliced ones are checked too and may replace them.
+    def usable(g) -> bool:
+        return g.sample_id not in poor and (g.char not in LOOPED or has_counter(g))
+
     for ch, gs in ff_by_char.items():
         direct = [g for g in gs if g.source == "freeform"]
-        if direct:
+        if any(usable(g) for g in direct):
             ff_by_char[ch] = direct
     verified = False
     if verifier is not None and ff_by_char:
@@ -198,7 +284,24 @@ def build_library(samples: list[SampleInput], verifier=None) -> BuildResult:
         if checked is not None:
             ff_by_char = {ch: gs for ch, gs in checked.items() if gs}
             verified = True
+    for gs in ff_by_char.values():
+        for g in gs:
+            clean_glyph(g)
     for ch, gs in ff_by_char.items():
+        # Best available tier (after verification, so a rejected letter never displaces an accepted
+        # one): usable separately written letters, then usable cut-out ones, then any from a sharp photo
+        # (blurry or low-resolution photos give lumpy, heavier letters), then whatever there is.
+        direct = [g for g in gs if g.source == "freeform"]
+        gs = next(
+            t
+            for t in (
+                [g for g in direct if usable(g)],
+                [g for g in gs if usable(g)],
+                [g for g in gs if g.sample_id not in poor],
+                gs,
+            )
+            if t
+        )
         # Template glyphs are labelled by the sheet itself; only free-form ones need the vote.
         for g in consistent_variants(gs, keep_max=6 if not lib.has(ch) else 2):
             lib.add(g)
@@ -211,7 +314,9 @@ def build_library(samples: list[SampleInput], verifier=None) -> BuildResult:
         v = _med(key)
         if v is not None:
             setattr(lib, key, float(np.clip(v, 0.05, 6.0)))
+    lib.joined_writing = any(seg.info.get("joined_writing") for seg in freeforms)
     dropped = _drop_outliers(lib)
+    filled = _drop_filled(lib)
     derived = add_derived(lib)
     centre_mid_height_marks(lib)
     has_template_slant = templates and any(lib.variants(c) for c in "bdfhkltI1")
@@ -239,6 +344,11 @@ def build_library(samples: list[SampleInput], verifier=None) -> BuildResult:
         advice.append("Missing punctuation: " + " ".join(missing_punct))
     if single_variant and len(single_variant) > 8:
         advice.append("Only one variant for many letters; add another sheet for more natural variation.")
+    if filled:
+        advice.append(
+            "The loop is filled in on every sample of: " + " ".join(filled) + ". Write these a little larger with "
+            "a fine pen and scan them (or photograph in good light) so the loop stays open."
+        )
     if derived:
         advice.append("Approximated from your other letters: " + ", ".join(derived) + ". Add them for a closer match.")
     if not templates and freeforms:
@@ -261,5 +371,6 @@ def build_library(samples: list[SampleInput], verifier=None) -> BuildResult:
         "rejected_samples": sum(1 for o in outcomes if o.status == "rejected"),
         "ai_verified_letters": verified,
         "derived_letters": derived,
+        "filled_letters": filled,
     }
     return BuildResult(lib, outcomes, report, ready)

@@ -1,7 +1,7 @@
 "use client";
 
 import { useId } from "react";
-import { Slider } from "./ui";
+import { SelectField, Slider } from "./ui";
 
 export interface StyleValues {
   handwriting_size_mm: number;
@@ -10,8 +10,11 @@ export interface StyleValues {
   char_spacing: number;
   word_spacing: number;
   variation: number;
+  letter_style: LetterStyle;
   ink_color: string;
 }
+
+export type LetterStyle = "auto" | "joined" | "separate";
 
 export const STYLE_DEFAULTS: StyleValues = {
   handwriting_size_mm: 2.8,
@@ -20,6 +23,7 @@ export const STYLE_DEFAULTS: StyleValues = {
   char_spacing: 1.0,
   word_spacing: 1.0,
   variation: 0.5,
+  letter_style: "auto",
   ink_color: "#1b2a6b",
 };
 
@@ -30,8 +34,17 @@ const INKS = [
   { value: "#3d4652", name: "Pencil grey" },
 ];
 
-/** Shared handwriting style sliders (ranges match the backend's RenderSettings limits). */
-export function StyleControls({ value, onChange }: { value: StyleValues; onChange: (v: StyleValues) => void }) {
+/** Shared handwriting style sliders (ranges match the backend's RenderSettings limits).
+ * ``autoLabel`` names the "auto" letter style: what it resolves to where the controls are used. */
+export function StyleControls({
+  value,
+  onChange,
+  autoLabel,
+}: {
+  value: StyleValues;
+  onChange: (v: StyleValues) => void;
+  autoLabel: string;
+}) {
   const set = <K extends keyof StyleValues>(k: K, v: StyleValues[K]) => onChange({ ...value, [k]: v });
   const colorId = useId();
   return (
@@ -93,6 +106,16 @@ export function StyleControls({ value, onChange }: { value: StyleValues; onChang
         format={(v) => `${Math.round(v * 100)}%`}
         hint="How much each letter wobbles in size, angle and baseline."
       />
+      <SelectField
+        label="Letters"
+        value={value.letter_style}
+        onChange={(e) => set("letter_style", e.target.value as LetterStyle)}
+        hint="Joined connects the letters of each word with joining strokes, like running handwriting."
+      >
+        <option value="auto">{autoLabel}</option>
+        <option value="joined">Joined (cursive)</option>
+        <option value="separate">Separate letters (print)</option>
+      </SelectField>
       <fieldset className="sm:col-span-2">
         <legend className="text-[13px] font-medium">Ink colour</legend>
         <div className="mt-2 flex flex-wrap items-center gap-2">

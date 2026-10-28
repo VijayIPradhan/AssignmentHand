@@ -34,6 +34,10 @@ sample coverage and quality:
    vision model returns which ones really show the labelled character. Only those survive. Your images are sent
    only for this purpose, to the provider you configured.
 6. **Consistency vote**: remaining variants of a character are compared with their medoid; outliers are dropped.
+   Before the vote, cut-out letters are tidied: small stray specks (a neighbour's i-dot) are removed and
+   letters without descenders are sat on the baseline. Letters from blurry or low-resolution photos are used
+   only when no sharp sample has that letter, and looped letters (a b d e g o p q) whose loop is filled in
+   are dropped when an open variant exists (and listed in the report when none does).
 7. **Library**: glyph bitmaps (with baseline and scale) and metrics are stored as a versioned JSON artifact,
    separate from your source samples. Deleting a profile deletes both.
 
@@ -43,6 +47,16 @@ sample coverage and quality:
   per variant as PDF form XObjects and placed with a transform. Ink colour, stroke weight (dilate/erode before
   tracing), slant (shear), size and rotation are all applied as vector operations; nothing is rasterised.
 - Layout uses measured glyph widths: letters are spaced by their actual ink extents plus your measured gap.
+- Every letter is normalised before placing: scaled so its body matches the x-height (or its class's median
+  height) and thinned or thickened towards the median pen width, so letters from different photos match.
+- **Joined letters** (cursive). The "Letters" style option: Automatic / Joined / Separate on a profile
+  (Automatic = joined when the free-form samples were written joined), and Same as the profile / Joined /
+  Separate on an assignment:
+  within a word, each lowercase letter is connected to the next by a drawn joining stroke at the pen width,
+  from the rightmost ink of one letter (at its lowest point, or its top for o v w b r) to the leftmost ink of
+  the next at the same height, so joins run level and do not cut through round letters. No joins after
+  g j q y z, capitals, digits or punctuation. The wobble is then applied per word rather than per letter so
+  the joins stay aligned.
   Lines snap to the ruled baseline grid; tall content (fractions, tables, figures) takes extra rows.
 - Natural variation is deterministic (seeded): variant choice without immediate repeats, slight scale,
   rotation and baseline jitter, and a smooth baseline wander per line. Same inputs + seed => identical PDF.

@@ -29,6 +29,9 @@ class RenderSettings(BaseModel):
     char_spacing: float = Field(1.0, ge=0.3, le=3.0)
     word_spacing: float = Field(1.0, ge=0.4, le=3.0)
     variation: float = Field(0.5, ge=0, le=1)
+    # "joined" connects the letters of each word with joining strokes (cursive), "separate" writes them
+    # apart. "auto": the profile's choice (an assignment), else joined if the samples were written joined.
+    letter_style: Literal["auto", "joined", "separate"] = "auto"
     paragraph_indent_mm: float = Field(6.0, ge=0, le=40)
     question_spacing_lines: int = Field(1, ge=0, le=6)
     include_question_text: bool = True

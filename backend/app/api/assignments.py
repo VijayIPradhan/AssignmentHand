@@ -516,7 +516,10 @@ def approve_all(aid: str, user: User = Depends(current_user), db: Session = Depe
 @router.get("/assignments/{aid}/render-config")
 def get_render_config(aid: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
     a = owned_assignment(db, aid, user)
-    return svc.effective_settings(a, db.get(HandwritingProfile, a.profile_id) if a.profile_id else None).model_dump()
+    out = svc.effective_settings(a, db.get(HandwritingProfile, a.profile_id) if a.profile_id else None).model_dump()
+    # The assignment's own choice: "auto" (same as the profile) unless it was set here.
+    out["letter_style"] = ((a.render_config.settings if a.render_config else {}) or {}).get("letter_style", "auto")
+    return out
 
 
 @router.put("/assignments/{aid}/render-config")

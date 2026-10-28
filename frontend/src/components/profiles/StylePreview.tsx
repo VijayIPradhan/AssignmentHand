@@ -91,7 +91,13 @@ export function StylePreview({ profile, onSaved }: { profile: Profile; onSaved: 
     >
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         <div className="flex flex-col gap-5">
-          <StyleControls value={style} onChange={setStyle} />
+          <StyleControls
+            value={style}
+            onChange={setStyle}
+            autoLabel={`Automatic: ${
+              (profile.metrics as Record<string, unknown> | undefined)?.joined_writing ? "joined" : "separate"
+            }, as in your samples`}
+          />
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="primary" loading={saving} disabled={!dirty} onClick={save}>
               Save style

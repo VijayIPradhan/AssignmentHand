@@ -8,16 +8,18 @@ All geometry is in millimetres. Within a ``Run``, x grows right and y grows *dow
 at y=0 (so ascenders have negative y).
 """
 
+import dataclasses
 import math
 import random
 from abc import ABC, abstractmethod
 from collections import Counter
 from dataclasses import dataclass, field
 
+import numpy as np
 from reportlab.pdfbase.pdfmetrics import stringWidth
 
-from app.handwriting.charset import SUBSTITUTIONS
-from app.handwriting.glyphs import Glyph, GlyphLibrary
+from app.handwriting.charset import ASCENDER_CHARS, SUBSTITUTIONS, UPPER, X_HEIGHT_CHARS
+from app.handwriting.glyphs import Glyph, GlyphLibrary, stroke_width_px
 from app.render.fonts import font_has_char, glyph_fallback_fonts
 
 PT_PER_MM = 72 / 25.4
@@ -110,6 +112,7 @@ class EngineStyle:
     char_spacing: float = 1.0
     word_spacing: float = 1.0
     variation: float = 0.5
+    joined: bool = False  # connect the letters of a word with drawn joining strokes (cursive)
 
 
 @dataclass
@@ -155,6 +158,27 @@ _SAME_SHAPE_CASE = set("covwxz")  # "s" and "u" are often written differently as
 _PUNCT_TIGHT = set(".,;:!?)]}'\"")
 _OPEN = set("([{")
 
+# Size normalisation: letters whose top is the x-height line (descenders included), and the classes
+# whose top is compared with the median of the class instead.
+_BODY = X_HEIGHT_CHARS | set("gpqy")
+_TALL_CLASSES = (set(ASCENDER_CHARS) - {"t"}, set(UPPER) | set("0123456789"))
+_JOIN_LETTERS = set("abcdefghijklmnopqrstuvwxyz")
+_NO_EXIT = set("gjqyz")  # end below the line (tails, the looped z): no join out of them
+_TOP_EXIT = set("bovwr")  # leave from the top of the x-height band, not the baseline
+
+
+def _joins(prev: str | None, ch: str) -> bool:
+    return prev in _JOIN_LETTERS and ch in _JOIN_LETTERS and prev not in _NO_EXIT
+
+
+def _bezier(p0, p1, p2, p3, n: int = 10) -> list[tuple[float, float]]:
+    out = []
+    for i in range(n + 1):
+        t = i / n
+        a, b, c, d = (1 - t) ** 3, 3 * t * (1 - t) ** 2, 3 * t * t * (1 - t), t**3
+        out.append((a * p0[0] + b * p1[0] + c * p2[0] + d * p3[0], a * p0[1] + b * p1[1] + c * p2[1] + d * p3[1]))
+    return out
+
 
 class GlyphCompositingEngine(HandwritingEngine):
     name = "glyph-compositing"
@@ -171,6 +195,12 @@ class GlyphCompositingEngine(HandwritingEngine):
         bottoms = [-g.bottom_mm for ch in "gjpqy" for g in library.variants(ch)]
         self._asc = max(tops) if tops else library.cap_height_mm * 1.1
         self._desc = (sorted(bottoms)[len(bottoms) // 2] if bottoms else library.x_height_mm * 0.55) * 1.1
+        self._class_top = [
+            float(np.median(ts)) if (ts := [g.top_mm for ch in cls for g in library.variants(ch)]) else None
+            for cls in _TALL_CLASSES
+        ]
+        self._norm_cache: dict[int, tuple[float, float, float]] = {}
+        self._anchor_cache: dict[tuple, tuple | None] = {}
 
     def set_size(self, x_height_mm: float) -> None:
         self.style.x_height_mm = x_height_mm
@@ -185,6 +215,112 @@ class GlyphCompositingEngine(HandwritingEngine):
 
     def descent(self, scale: float = 1.0) -> float:
         return self._desc * self.s * scale
+
+    def _norm(self, g: Glyph) -> tuple[float, float, float]:
+        """(size factor, stroke weight factor, stroke width in glyph mm) that make a glyph match the others.
+
+        Letters collected from different photos come out at slightly different sizes and pen widths;
+        each is scaled so its body matches the x-height (or its class's median height) and thinned or
+        thickened towards the median stroke width."""
+        hit = self._norm_cache.get(id(g))
+        if hit is not None:
+            return hit
+        r = 1.0
+        if g.top_mm > 0.3:
+            if g.char in _BODY:
+                r = self.lib.x_height_mm / g.top_mm
+            else:
+                for cls, med in zip(_TALL_CLASSES, self._class_top, strict=True):
+                    if g.char in cls and med:
+                        r = med / g.top_mm
+        r = min(1.3, max(0.77, r))
+        sw = stroke_width_px(g.bitmap) / g.px_per_mm if int((g.bitmap > 127).sum()) >= 60 else 0.0
+        w = 1.0
+        if sw > 0 and self.lib.stroke_mm > 0:
+            w = round(min(1.5, max(0.65, self.lib.stroke_mm / (sw * r))) * 20) / 20
+        hit = self._norm_cache[id(g)] = (r, w, sw or self.lib.stroke_mm / r)
+        return hit
+
+    def _side(self, g: Glyph):
+        """Ink mask, x-height band (rows), x-height in px and stroke inset (mm) used to find join points."""
+        m = g.bitmap > 127
+        r, _w, sw = self._norm(g)
+        xh_px = self.lib.x_height_mm / r * g.px_per_mm
+        v = g.baseline_px - np.arange(m.shape[0])  # px above the baseline, per row
+        band = (v >= -0.12 * xh_px) & (v <= 1.08 * xh_px)
+        return m, v, band, xh_px, 0.35 * sw  # start inside the stroke so the round cap blends in
+
+    def _exit(self, g: Glyph) -> tuple[float, float, float] | None:
+        """Where a joining stroke leaves a glyph: the rightmost ink in the x-height band, at its lowest
+        point (its top for o, v, w, b, r). Glyph mm (y up) plus the height as a share of the x-height."""
+        key = ("exit", id(g))
+        if key in self._anchor_cache:
+            return self._anchor_cache[key]
+        m, v, band, xh_px, inset = self._side(g)
+        cols = np.nonzero((m & band[:, None]).any(axis=0))[0]
+        out = None
+        if len(cols):
+            c = int(cols.max())
+            ys = np.nonzero(m[:, c] & band)[0]
+            y = int(ys.min() if g.char in _TOP_EXIT else ys.max())
+            out = (c / g.px_per_mm - inset, v[y] / g.px_per_mm, float(v[y] / xh_px))
+        self._anchor_cache[key] = out
+        return out
+
+    def _entry(self, g: Glyph, rel: float) -> tuple[float, float] | None:
+        """Where a joining stroke enters a glyph: the leftmost ink near ``rel`` x-heights above the
+        baseline (the height the stroke left the previous letter), so joins run level and do not cut
+        across round letters."""
+        rel = min(0.85, max(0.1, rel))
+        key = ("entry", id(g), round(rel, 1))
+        if key in self._anchor_cache:
+            return self._anchor_cache[key]
+        m, v, band, xh_px, inset = self._side(g)
+        target = rel * xh_px
+        cols = np.nonzero((m & band[:, None]).any(axis=0))[0]
+        out = fallback = None
+        first = int(cols.min()) if len(cols) else m.shape[1]
+        for c in range(
+            first, min(m.shape[1], first + max(2, int(0.25 * (cols.max() - first + 1))) if len(cols) else 0)
+        ):
+            ys = np.nonzero(m[:, c] & band)[0]
+            if not len(ys):
+                continue
+            y = int(ys[np.argmin(np.abs(v[ys] - target))])
+            pt = (c / g.px_per_mm + inset, v[y] / g.px_per_mm)
+            fallback = fallback or pt
+            if abs(v[y] - target) <= 0.3 * xh_px:
+                out = pt
+                break
+        out = out or fallback
+        self._anchor_cache[key] = out
+        return out
+
+    @staticmethod
+    def _place(it: GlyphItem, u: float, v: float) -> tuple[float, float]:
+        """A glyph-space point (mm, y up) on the page (mm, y down), with the item's rotation and shear."""
+        r = math.radians(it.rot)
+        cs, sn = math.cos(r), math.sin(r)
+        k = it.scale
+        return it.x + k * (cs * u + (cs * it.shear - sn) * v), it.y - k * (sn * u + (sn * it.shear + cs) * v)
+
+    def _connector(self, a: GlyphItem, b: GlyphItem, scale: float) -> LineItem | None:
+        ea = self._exit(a.glyph)
+        nb = self._entry(b.glyph, ea[2]) if ea else None
+        if ea is None or nb is None:
+            return None
+        p0, p3 = self._place(a, ea[0], ea[1]), self._place(b, *nb)
+        xh = self.x_height * scale
+        dx = p3[0] - p0[0]
+        if dx < -0.4 * xh or dx > 2.2 * xh or abs(p3[1] - p0[1]) > 1.3 * xh:
+            return None
+        d = max(dx, 0.25 * xh)
+        # A shallow pen swing: leave level, sag slightly, arrive level.
+        p1 = (p0[0] + 0.4 * d, p0[1] + 0.05 * xh)
+        p2 = (p3[0] - 0.4 * d, p3[1] + 0.05 * xh)
+        # The letters are normalised towards the median pen width, so the join uses that width too.
+        width = self.lib.stroke_mm * 0.5 * sum(it.scale / self._norm(it.glyph)[0] for it in (a, b)) * self.style.weight
+        return LineItem(_bezier(p0, p1, p2, p3), width)
 
     def _letter_gap(self, rng: random.Random, scale: float) -> float:
         v = self.style.variation
@@ -208,12 +344,16 @@ class GlyphCompositingEngine(HandwritingEngine):
 
     def _glyph_run(self, g: Glyph, rng: random.Random, scale: float, extra_scale: float = 1.0, dy: float = 0.0) -> Run:
         v = self.style.variation
+        # Joined writing keeps each letter steady on the line (the word as a whole wobbles instead,
+        # see _tilt_words), so the joining strokes meet the letters cleanly.
+        steady = 0.25 if self.style.joined else 1.0
+        r, w, _sw = self._norm(g)
         js = 1 + rng.gauss(0, 0.03 * v)
-        k = self.s * scale * extra_scale * js
-        rot = rng.gauss(0, 1.3 * v)
-        jy = rng.gauss(0, 0.05 * self.lib.x_height_mm * self.s * scale * v) + dy
+        k = self.s * scale * extra_scale * js * r
+        rot = rng.gauss(0, 1.3 * v * steady)
+        jy = rng.gauss(0, 0.05 * self.lib.x_height_mm * self.s * scale * v * steady) + dy
         # Scaling a glyph up also thickens its strokes; compensate so it matches the surrounding letters.
-        item = GlyphItem(g, 0.0, jy, k, rot, self.shear, extra_scale**-0.8 if extra_scale > 1.05 else 1.0)
+        item = GlyphItem(g, 0.0, jy, k, rot, self.shear, w * (extra_scale**-0.8 if extra_scale > 1.05 else 1.0))
         return Run([item], g.width_mm * k, g.top_mm * k - jy, max(0.0, -g.bottom_mm * k + jy))
 
     def _char_run(self, ch: str, rng: random.Random, scale: float) -> Run:
@@ -243,22 +383,58 @@ class GlyphCompositingEngine(HandwritingEngine):
     def shape(self, text: str, rng: random.Random, scale: float = 1.0) -> Run:
         run = Run()
         prev = None
+        joined = self.style.joined
+        words: list[tuple[int, float]] = [(0, 0.0)]  # (first item index, start x) of each word
+        links: list[tuple[int, int]] = []  # glyph item index pairs to connect
+        last_glyph: int | None = None
         for ch in text:
             if ch == " ":
                 run.width += self.space_width(rng, scale)
                 prev = " "
+                words.append((len(run.items), run.width))
+                last_glyph = None
                 continue
             if ch in ("\n", "\r", "\u200b"):
                 continue
             cr = self._char_run(ch, rng, scale)
+            link = joined and last_glyph is not None and _joins(prev, ch)
             if prev is None or prev == " ":
                 gap = 0.0
             else:
                 gap = self._letter_gap(rng, scale)
                 if ch in _PUNCT_TIGHT or prev in _OPEN:
                     gap *= 0.55
+            start = len(run.items)
             run.append(cr, gap)
+            placed = start if len(run.items) == start + 1 and isinstance(run.items[start], GlyphItem) else None
+            if link and placed is not None:
+                links.append((last_glyph, placed))
+            last_glyph = placed
             prev = ch
+        if joined:
+            self._tilt_words(run, words, rng, scale)
+            for a, b in links:
+                ln = self._connector(run.items[a], run.items[b], scale)
+                if ln is not None:
+                    run.items.append(ln)
         run.ascent = max(run.ascent, self.ascent(scale) * 0.6)
         run.descent = max(run.descent, 0.0)
         return run
+
+    def _tilt_words(self, run: Run, words: list[tuple[int, float]], rng: random.Random, scale: float) -> None:
+        """Give each word one small rotation and baseline offset, applied to all its letters together."""
+        v = self.style.variation
+        ends = [w[0] for w in words[1:]] + [len(run.items)]
+        for (i0, x0), i1 in zip(words, ends, strict=True):
+            if i1 <= i0:
+                continue
+            t = rng.gauss(0, 0.9 * v)
+            dy0 = rng.gauss(0, 0.04 * self.x_height * scale * v)
+            slope = math.tan(math.radians(t))
+            for i in range(i0, i1):
+                it = run.items[i]
+                dy = dy0 - slope * (it.x - x0)  # a counter-clockwise tilt lifts the end of the word
+                if isinstance(it, GlyphItem | FallbackItem):
+                    run.items[i] = dataclasses.replace(it, y=it.y + dy, rot=it.rot + t)
+                else:
+                    run.items[i] = shift_item(it, 0.0, dy)

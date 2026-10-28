@@ -1,7 +1,7 @@
 """API request/response models."""
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -87,6 +87,7 @@ class StyleIn(BaseModel):
     char_spacing: float | None = Field(None, ge=0.3, le=3.0)
     word_spacing: float | None = Field(None, ge=0.4, le=3.0)
     variation: float | None = Field(None, ge=0, le=1)
+    letter_style: Literal["auto", "joined", "separate"] | None = None
     ink_color: str | None = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
 
 
