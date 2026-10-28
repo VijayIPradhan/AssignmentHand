@@ -14,7 +14,7 @@ import {
   type TextareaHTMLAttributes,
 } from "react";
 import { AlertCircle, AlertTriangle, CheckCircle2, Info, Loader2, RotateCw } from "lucide-react";
-import type { Job } from "@/lib/types";
+import type { Job, JobEvent } from "@/lib/types";
 
 export function cx(...parts: (string | false | null | undefined)[]) {
   return parts.filter(Boolean).join(" ");
@@ -500,7 +500,29 @@ export function JobProgress({ job, label, error }: { job: Job | null; label: str
       {(job?.message || error) && (
         <p className={cx("mt-1.5 text-[13px]", error ? "text-margin" : "text-muted")}>{error ?? job?.message}</p>
       )}
+      <JobSteps events={(job?.events ?? []) as JobEvent[]} />
     </div>
+  );
+}
+
+/** Collapsible timeline of a job's steps, retries and errors. */
+export function JobSteps({ events }: { events: JobEvent[] }) {
+  if (events.length < 2) return null;
+  return (
+    <details className="mt-2 text-[12.5px]">
+      <summary className="cursor-pointer text-muted hover:text-graphite">Show steps ({events.length})</summary>
+      <ol className="mt-1.5 space-y-0.5 border-l border-rule pl-3">
+        {events.map((e, i) => (
+          <li
+            key={`${e.at}-${i}`}
+            className={cx(e.level === "error" ? "text-margin" : e.level === "warning" ? "text-warn" : "text-muted")}
+          >
+            <span className="tabular-nums">{new Date(e.at).toLocaleTimeString()}</span> {e.msg}
+            {typeof e.prev_step_ms === "number" && i > 0 && <span> (previous step {(e.prev_step_ms / 1000).toFixed(1)}s)</span>}
+          </li>
+        ))}
+      </ol>
+    </details>
   );
 }
 

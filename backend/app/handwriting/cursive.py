@@ -146,6 +146,8 @@ def shape_plausible(ch: str, top: float, bottom: float, width: float) -> bool:
     ``top``/``bottom`` are heights above the baseline (bottom is negative for descenders)."""
     if width > 2.4 * weight(ch) + 0.6 or width < 0.08:
         return False
+    if ch == "z":  # written either on the line or as the cursive "ʒ" with a loop below it
+        return 0.5 <= top <= 1.9 and bottom >= -2.0
     if ch in _XH:
         return 0.5 <= top <= 1.75 and bottom >= -0.4
     if ch in _ASC:

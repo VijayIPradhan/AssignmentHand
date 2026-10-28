@@ -105,6 +105,8 @@ def render_pdf(
             if isinstance(it, GlyphItem):
                 name = _ensure_form(c, defined, it.glyph, round(weight * it.weight, 2))
                 c.saveState()
+                if it.color:
+                    c.setFillColor(HexColor(it.color))
                 _transform(c, it.x, it.y, H, it.scale * PT_PER_MM, it.rot, it.shear)
                 c.doForm(name)
                 c.restoreState()

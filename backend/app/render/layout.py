@@ -50,6 +50,8 @@ class AnswerSpace:
     top: float
     bottom: float
     left: float
+    # Bands (top, bottom) in mm inside the space that hold printed text (e.g. "[10 Marks]") - not written over
+    blocked: list[tuple[float, float]] = field(default_factory=list)
 
 
 @dataclass
@@ -94,6 +96,7 @@ class Frame:
     top: float  # baseline-grid origin and upper limit (mm)
     bottom: float
     left: float
+    blocked: list[tuple[float, float]] = field(default_factory=list)  # bands to skip (mm)
 
 
 @dataclass
@@ -456,9 +459,20 @@ class Layouter:
             cand = max(cand, pb + pd + line.clearance + line.run.ascent)
         return self._grid(cand, top)
 
+    def _clear(self, b: float, ln: Line, fr: Frame) -> float:
+        """Move a baseline down past any blocked band its line would touch."""
+        moved = True
+        while moved:
+            moved = False
+            for t, btm in fr.blocked:
+                if b - ln.run.ascent < btm and b + ln.run.descent > t:
+                    b = self._grid(btm + ln.run.ascent, fr.top)
+                    moved = True
+        return b
+
     def _fits(self, lines: list[Line], prev, first_on_page: bool, fr: Frame) -> bool:
         for ln in lines:
-            b = self._place(ln, prev, first_on_page, fr.top)
+            b = self._clear(self._place(ln, prev, first_on_page, fr.top), ln, fr)
             if b + ln.run.descent > fr.bottom + 0.01:
                 return False
             prev, first_on_page = (b, ln.run.descent), False
@@ -492,7 +506,7 @@ class Layouter:
                     frames.append((make_extra(), []))
                     prev = None
                     continue
-            b = self._place(ln, prev, first_line, fr.top)
+            b = self._clear(self._place(ln, prev, first_line, fr.top), ln, fr)
             if b + ln.run.descent > fr.bottom + 0.01:
                 fresh_page = fr.top <= self.s.margins.top + 0.01 and not items
                 if not fresh_page:
@@ -619,7 +633,7 @@ class Layouter:
                     new_pages.append(pg)
                     return self._blank_frame(pg)
 
-                first = Frame(host, sp.top, sp.bottom, left) if host is not None else extra()
+                first = Frame(host, sp.top, sp.bottom, left, list(sp.blocked)) if host is not None else extra()
                 placed = self.flow(lines, first, extra)
                 overflow = len(new_pages) - (0 if host is not None else 1)
                 if overflow <= 0 or not self.s.fit_to_space or scale <= self.s.min_fit_scale + 1e-6:

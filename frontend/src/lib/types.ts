@@ -10,9 +10,20 @@ import type { components } from "./api-schema";
 type S = components["schemas"];
 
 export type User = S["UserOut"];
+export type ModelRouting = S["ModelRoutingOut"];
 export type Job = S["JobOut"];
+
+/** One entry of a job's step timeline (``events`` on JobOut). */
+export interface JobEvent {
+  at: string;
+  level: "info" | "warning" | "error";
+  msg: string;
+  prev_step_ms?: number;
+  [key: string]: unknown;
+}
 export type AnswerUpdate = S["AnswerUpdate"];
-export type AssignmentUpdate = S["AssignmentUpdate"];
+// Partial: every field of an update is optional (the generator marks defaulted fields as required)
+export type AssignmentUpdate = Partial<S["AssignmentUpdate"]>;
 export type QuestionIn = Partial<S["QuestionIn"]> & { text: string };
 export type QuestionUpdate = Partial<S["QuestionUpdate"]>;
 export type StyleIn = S["StyleIn"];
@@ -238,6 +249,95 @@ export interface Estimate {
   cost_usd_min: number | null;
   cost_usd_max: number | null;
   model: string;
+  /** Per-model split: each question is routed like generation does (light model, or strongest for hard ones). */
+  models: EstimateModel[];
   pricing_known: boolean;
   ai: AiStatus;
+}
+
+export interface EstimateModel {
+  model: string;
+  questions: number;
+  hard: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd_min: number | null;
+  cost_usd_max: number | null;
+}
+
+// ------------------------------------------------------------------------------------ AI usage
+
+export interface UsageAgg {
+  calls: number;
+  errors: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+  unpriced_calls: number;
+  estimated: boolean;
+  avg_latency_ms: number;
+}
+
+export type UsageGroup = UsageAgg & { key: string; title?: string };
+
+export interface UsageCall {
+  at: string;
+  task: string;
+  model: string;
+  served_model: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  latency_ms: number;
+  status: string;
+  error_type: string | null;
+  cost_usd: number | null;
+  pricing_source: string;
+  assignment_id: string | null;
+  assignment_title: string | null;
+  profile_id: string | null;
+}
+
+export interface Budget {
+  limit_usd: number | null;
+  spent_usd: number;
+  remaining_usd: number | null;
+  percent: number | null;
+  exceeded: boolean;
+  warning?: boolean;
+}
+
+export interface Usage {
+  period_days: number;
+  totals: UsageAgg;
+  all_time: { calls: number; cost_usd: number };
+  by_model: UsageGroup[];
+  by_task: UsageGroup[];
+  by_day: UsageGroup[];
+  by_assignment: UsageGroup[];
+  recent: UsageCall[];
+  pricing: { model: string; input_per_mtok: number | null; output_per_mtok: number | null; source: string }[];
+  routing: Record<string, string>;
+  budget: Budget;
+}
+
+// ------------------------------------------------------------------------------------ signature & form fields
+
+export interface SignatureInfo {
+  available: boolean;
+  width?: number;
+  height?: number;
+  version?: string;
+}
+
+export interface FormFieldInfo {
+  key: string;
+  label: string;
+  kind: "signature" | "text";
+  pages: number[];
+}
+
+export interface AssignmentFields {
+  fields: FormFieldInfo[];
+  suggestions: Record<string, string>;
+  signature_available: boolean;
 }

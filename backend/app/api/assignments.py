@@ -57,6 +57,7 @@ def _detail(db: Session, a: Assignment) -> AssignmentDetail:
     out = AssignmentDetail.model_validate(a)
     out.documents = [DocumentOut.model_validate(d) for d in a.documents]
     out.questions = [QuestionOut.model_validate(q) for q in a.questions]
+    out.effective_preferences = svc.preferences(a).model_dump()
     out.rendered = [RenderedOut.model_validate(r) for r in a.rendered]
     out.render_settings = svc.effective_settings(
         a, db.get(HandwritingProfile, a.profile_id) if a.profile_id else None
@@ -75,7 +76,7 @@ def _detail(db: Session, a: Assignment) -> AssignmentDetail:
         "approved": sum(1 for q in included if q.answer and q.answer.status == AnswerStatus.approved),
         "words": sum(q.answer.word_count for q in included if q.answer),
         "cost_usd": round(sum((q.answer.cost_usd or 0) for q in included if q.answer), 4),
-        "ai": provider_status(),
+        "ai": provider_status(svc.routing(a)),
     }
     return out
 
@@ -144,7 +145,10 @@ def update_assignment(
     if body.instructions is not None:
         a.instructions = body.instructions.strip() or None
     if body.preferences is not None:
+        # Per-assignment overrides of the global preferences (rarely needed; see PUT /preferences)
         a.preferences = {**(a.preferences or {}), **body.preferences.model_dump(exclude_none=True)}
+    if body.clear_preference_overrides:
+        a.preferences = {}
     if "profile_id" in body.model_fields_set:
         if body.profile_id is not None:
             owned(db, HandwritingProfile, body.profile_id, user)
@@ -239,10 +243,9 @@ def figure(
 
 @router.post("/assignments/{aid}/extract", response_model=JobOut, status_code=202)
 def re_extract(aid: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    """Re-run extraction. Questions you added manually are kept; extracted ones are replaced."""
+    """Re-read the PDF. Questions with answers (and your own added questions) are kept: their page
+    layout is refreshed and their text, marks and answers are left as they are."""
     a = owned_assignment(db, aid, user)
-    if any(q.answer and q.answer.status == AnswerStatus.approved for q in a.questions if q.origin == "extracted"):
-        raise Conflict("Some extracted questions have approved answers; re-extraction would discard them")
     return enqueue(db, user_id=user.id, type="extract", assignment_id=a.id)
 
 
@@ -407,7 +410,8 @@ def confirm_extraction(aid: str, user: User = Depends(current_user), db: Session
 @router.get("/assignments/{aid}/estimate")
 def estimate(aid: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Approximate token use and cost for generating all included answers."""
-    return {**svc.estimate_generation(owned_assignment(db, aid, user), None), "ai": provider_status()}
+    a = owned_assignment(db, aid, user)
+    return {**svc.estimate_generation(a, None), "ai": provider_status(svc.routing(a))}
 
 
 @router.post("/assignments/{aid}/generate", response_model=JobOut, status_code=202)
@@ -421,6 +425,9 @@ def generate(aid: str, body: GenerateIn, user: User = Depends(current_user), db:
         )
     s = get_settings()
     check_rate(user.id, "generate", s.rate_limit_generate_per_min)
+    from app.ai.budget import enforce_budget
+
+    enforce_budget(db, user.id)
     n = len([q for q in a.questions if not q.excluded and (body.question_ids is None or q.id in body.question_ids)])
     if n > s.max_questions_per_generation:
         raise AppError(

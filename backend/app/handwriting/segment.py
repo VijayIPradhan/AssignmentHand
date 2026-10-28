@@ -190,10 +190,13 @@ def extract_template(img: np.ndarray, sample_id: str, page_hint: int | None = No
 
 
 def _line_bands(mask: np.ndarray) -> list[tuple[int, int]]:
-    """Split unruled writing into lines. Line cores are peaks of the row-ink profile at least about
-    one line pitch apart (pitch from the profile autocorrelation, never less than a typical letter
-    height); lines are divided at the profile minimum between neighbouring peaks, so touching
-    ascenders/descenders do not merge lines."""
+    """Split unruled writing into lines.
+
+    Line cores are local maxima of the row-ink profile. Two neighbouring maxima are separate lines
+    only if a real valley of ink lies between them (prominence), so short lines and lines written
+    closer than usual are kept, while the ascender and core zones of one line are not split. Lines
+    are divided at the profile minimum between peaks, so touching ascenders/descenders do not merge
+    lines."""
     h = mask.shape[0]
     prof = (mask > 0).sum(axis=1).astype(np.float64)
     if prof.max() == 0:
@@ -203,21 +206,28 @@ def _line_bands(mask: np.ndarray) -> list[tuple[int, int]]:
     _n, _l, st, _c = cv2.connectedComponentsWithStats(mask, connectivity=8)
     heights = st[1:, cv2.CC_STAT_HEIGHT]
     heights = heights[heights > max(4, h // 400)]
-    comp_h = float(np.median(heights)) if len(heights) else h / 10
-    centred = prof - prof.mean()
-    ac = np.correlate(centred, centred, mode="full")[len(prof) - 1 :]
-    lag_min = int(max(8, comp_h * 1.2))
-    lag_max = max(lag_min + 1, h // 2)
-    pitch = lag_min + int(np.argmax(ac[lag_min:lag_max])) if lag_max > lag_min + 1 else int(comp_h * 2)
-    d = int(max(pitch * 0.5, comp_h * 0.9))
-    floor = 0.15 * prof.max()
+    # Typical letter height: upper quartile, so dots, commas and quote marks do not shrink it.
+    comp_h = float(np.percentile(heights, 75)) if len(heights) else h / 10
+    floor = 0.06 * prof.max()  # short lines (e.g. "U V W X Y Z") carry little ink
+    r = max(2, int(comp_h * 0.5))
+    cands = [
+        y
+        for y in range(h)
+        if prof[y] >= floor
+        and prof[y] >= prof[max(0, y - r) : y + r + 1].max()
+        and (y == 0 or prof[y] > prof[y - 1])  # first row of a plateau only
+    ]
     peaks: list[int] = []
-    for y in range(h):
-        if prof[y] < floor:
-            continue
-        lo, hi = max(0, y - d), min(h, y + d + 1)
-        if prof[y] >= prof[lo:hi].max() and (not peaks or y - peaks[-1] > d):
-            peaks.append(y)
+    for y in cands:
+        if peaks:
+            p = peaks[-1]
+            valley = float(prof[p : y + 1].min())
+            # Same line unless they are a letter-height apart and separated by a clear valley.
+            if y - p < comp_h * 0.9 or valley > 0.55 * min(prof[p], prof[y]):
+                if prof[y] > prof[p]:
+                    peaks[-1] = y
+                continue
+        peaks.append(y)
     if not peaks:
         return []
     nz = np.nonzero(prof > 0.02 * prof.max())[0]
@@ -324,7 +334,89 @@ def _lines_from_bands(mask, stats, cents) -> list[_TextLine]:
             if a <= cy < b:
                 groups[li].append(i)
                 break
-    return [_TextLine(g, np.zeros(w)) for g in groups if g]
+    groups = [g for g in groups if g]
+    heights = [int(stats[i, cv2.CC_STAT_HEIGHT]) for g in groups for i in g]
+    med_h = float(np.median(heights)) if heights else 0.0
+    merged: list[list[int]] = []
+    for g in groups:
+        tallest = max(int(stats[i, cv2.CC_STAT_HEIGHT]) for i in g)
+        # A row of only small marks (dots of "!" and "?", a stray descender loop) belongs to the line above.
+        if merged and tallest < 0.6 * med_h:
+            merged[-1] += g
+        else:
+            merged.append(list(g))
+    return [_TextLine(g, np.zeros(w)) for g in merged]
+
+
+def _lines_from_components(stats, cents, w: int) -> list[_TextLine]:
+    """Group letters into lines by vertical overlap (works for sparse rows such as practice
+    alphabets, where the ink profile has gaps inside a row). Small marks join the nearest line."""
+    n = len(stats)
+    if n <= 1:
+        return []
+    hs = stats[1:, cv2.CC_STAT_HEIGHT]
+    p75 = float(np.percentile(hs, 75))
+    letters = [i for i in range(1, n) if stats[i, cv2.CC_STAT_HEIGHT] >= 0.35 * p75]
+    marks = [i for i in range(1, n) if i not in set(letters)]
+    letters.sort(key=lambda i: stats[i, cv2.CC_STAT_TOP])
+    groups: list[list[int]] = []
+    spans: list[list[int]] = []  # [top, bottom] of each group
+    for i in letters:
+        t, b = int(stats[i, 1]), int(stats[i, 1] + stats[i, 3])
+        best, best_ov = None, 0.0
+        for gi, (gt, gb) in enumerate(spans):
+            ov = min(b, gb) - max(t, gt)
+            if ov > best_ov:
+                best, best_ov = gi, ov
+        if best is not None and best_ov >= 0.5 * min(b - t, max(1, spans[best][1] - spans[best][0])):
+            groups[best].append(i)
+            spans[best] = [min(spans[best][0], t), max(spans[best][1], b)]
+        else:
+            groups.append([i])
+            spans.append([t, b])
+    # Groups of only small marks (e.g. the dots under "!" and "?") are not rows of their own.
+    small = [k for k, g in enumerate(groups) if max(int(stats[i, cv2.CC_STAT_HEIGHT]) for i in g) < 0.5 * p75]
+    if len(small) < len(groups):
+        for k in small:
+            marks += groups[k]
+        keep = [k for k in range(len(groups)) if k not in small]
+        groups = [groups[k] for k in keep]
+        spans = [spans[k] for k in keep]
+    for i in marks:
+        cy = cents[i][1]
+        gi = min(
+            range(len(spans)),
+            key=lambda k: 0 if spans[k][0] <= cy <= spans[k][1] else min(abs(cy - spans[k][0]), abs(cy - spans[k][1])),
+        )
+        groups[gi].append(i)
+    order = sorted(range(len(groups)), key=lambda k: (spans[k][0] + spans[k][1]) / 2)
+    return [_TextLine(groups[k], np.zeros(w)) for k in order]
+
+
+def _fit_tilt(line: _TextLine, stats: np.ndarray, w: int) -> None:
+    """Fit an unruled line's baseline through the bottoms of its letters (handwritten lines drift
+    up or down across the page). Descenders and marks above the line are excluded iteratively."""
+    ids = [i for i in line.ids if stats[i, cv2.CC_STAT_HEIGHT] > 3]
+    if len(ids) < 4:
+        return
+    hs = np.array([stats[i, cv2.CC_STAT_HEIGHT] for i in ids], dtype=float)
+    h_med = float(np.median(hs))
+    big = [i for i, h in zip(ids, hs, strict=True) if h >= 0.5 * h_med]  # skip dots, commas, i-dots
+    if len(big) < 6:  # too few letters to fit a slope reliably (e.g. a short practice row)
+        return
+    xs = np.array([stats[i, 0] + stats[i, 2] / 2 for i in big], dtype=float)
+    ys = np.array([stats[i, 1] + stats[i, 3] for i in big], dtype=float)
+    keep = np.ones(len(xs), dtype=bool)
+    coef = np.polyfit(xs, ys, 1)
+    for _ in range(3):
+        res = ys - np.polyval(coef, xs)
+        keep = (res < 0.3 * h_med) & (res > -0.6 * h_med)  # descenders hang below the baseline
+        if keep.sum() < 3:
+            return
+        coef = np.polyfit(xs[keep], ys[keep], 1)
+    slope = float(np.clip(coef[0], -0.09, 0.09))  # at most about 5 degrees
+    xi = np.arange(w)
+    line.tilt = slope * (xi - w / 2)
 
 
 def _measure_core(line: _TextLine, labels: np.ndarray, stats: np.ndarray) -> None:
@@ -346,10 +438,22 @@ def _measure_core(line: _TextLine, labels: np.ndarray, stats: np.ndarray) -> Non
     line.core_bottom = float(lo + core.max())
 
 
+MAX_STROKE_PX = 9.0
+
+
 def analyze_freeform(img: np.ndarray, sample_id: str, transcript: str | None) -> SegmentResult:
     gray = to_gray(img)
     norm = normalize_illumination(gray)
     mask = binarize(norm)
+    # Close-up photos give very thick strokes; a ballpoint's shiny centre then reads as two edges
+    # (hollow letters). Scale such images down so strokes are solid and of ordinary width.
+    sw = stroke_width_px(mask)
+    if sw > MAX_STROKE_PX:
+        f = MAX_STROKE_PX * 0.7 / sw
+        img = cv2.resize(img, None, fx=f, fy=f, interpolation=cv2.INTER_AREA)
+        gray = to_gray(img)
+        norm = normalize_illumination(gray)
+        mask = binarize(norm)
     mask, rinfo = remove_ruling(img, mask)
     fits = rinfo.pop("fits", [])
     res = SegmentResult(info={"kind": "freeform", **rinfo})
@@ -373,6 +477,12 @@ def analyze_freeform(img: np.ndarray, sample_id: str, transcript: str | None) ->
     lines = _lines_from_rules(fits, stats, cents, w) if fits else []
     if not lines:
         lines = _lines_from_bands(mask, stats, cents)
+        expected_lines = len([t for t in (transcript or "").splitlines() if t.strip()])
+        if expected_lines and len(lines) != expected_lines:
+            # Sparse rows (practice alphabets) can split in the ink profile; try grouping by overlap.
+            alt = _lines_from_components(stats, cents, w)
+            if len(alt) == expected_lines:
+                lines = alt
     # drop near-empty lines (specks, stray marks)
     ink = [sum(int(stats[i, cv2.CC_STAT_AREA]) for i in ln.ids) for ln in lines]
     if ink:
@@ -382,6 +492,8 @@ def analyze_freeform(img: np.ndarray, sample_id: str, transcript: str | None) ->
         res.issues.append("fatal:no lines of handwriting were detected")
         return res
     for ln in lines:
+        if not fits:
+            _fit_tilt(ln, stats, w)
         _measure_core(ln, labels, stats)
         ln.clusters = _clusters_for_line(labels, stats, ln.ids)
 
@@ -459,14 +571,28 @@ def analyze_freeform(img: np.ndarray, sample_id: str, transcript: str | None) ->
             "make each transcript line match one written line"
         )
         return res
+    lower_lines = [
+        ln.x_height
+        for t, ln in zip(t_lines, lines, strict=True)
+        if ln.x_height > 2 and sum(ch in "acemnorsuvwxz" for ch in t) >= 3
+    ]
+    xh_lower = float(np.median(lower_lines)) if lower_lines else None
     expected = sum(len(t.replace(" ", "")) for t in t_lines)
     joined = total_clusters < 0.75 * expected
     res.info["joined_writing"] = joined
     aligned = sliced = rejected = 0
     skipped: list[int] = []
+    # (char, bitmap, height above baseline px, direct?, line x-height px or None if the line has no lowercase)
+    candidates: list[tuple[str, np.ndarray, float, bool, float | None]] = []
     for li, (text, ln) in enumerate(zip(t_lines, lines, strict=True)):
         words_txt = text.split()
         line_xh = ln.x_height if ln.x_height > 2 else xh_px
+        # A line of only capitals/digits ("A B C ...", "0123...") has no x-height band of its own: its
+        # core band is the capital height. Its x-height is resolved after all letters are collected.
+        own_xh: float | None = line_xh
+        if sum(ch in "acemnorsuvwxz" for ch in text) < 3:
+            own_xh = None
+            line_xh = xh_lower or xh_px
         assign = group_words([(c.x0, c.x1) for c in ln.clusters], words_txt, line_xh)
         if assign is None:
             skipped.append(li + 1)
@@ -499,15 +625,24 @@ def analyze_freeform(img: np.ndarray, sample_id: str, transcript: str | None) ->
                     continue
                 bmp, oy, _ox = cropped
                 base = ln.baseline_at(x0 + (a + b) / 2)
-                top = (base - (y0 + oy)) / line_xh
-                bottom = (base - (y0 + oy + bmp.shape[0])) / line_xh
-                if not shape_plausible(ch, top, bottom, bmp.shape[1] / line_xh):
-                    rejected += 1
-                    continue
-                g = Glyph(ch, bmp, 1.0, float(base - (y0 + oy)), "freeform" if direct else "freeform-sliced", sample_id)
-                g.x_height_px = line_xh
-                res.glyphs.append(g)
-                aligned += 1
+                candidates.append((ch, bmp, float(base - (y0 + oy)), direct, own_xh))
+    # x-height for lines without lowercase text: the page's lowercase lines, else the x-height
+    # letters that were written separately on these practice rows (e.g. "t z w u").
+    xh_rows = xh_lower
+    if xh_rows is None:
+        tops = [top for ch, _b, top, direct, _x in candidates if direct and ch in "acemnorsuvwxz"]
+        xh_rows = float(np.median(tops)) if len(tops) >= 2 else xh_px
+    for ch, bmp, top_px, direct, own_xh in candidates:
+        lxh = own_xh or xh_rows
+        top = top_px / lxh
+        bottom = (top_px - bmp.shape[0]) / lxh
+        if not shape_plausible(ch, top, bottom, bmp.shape[1] / lxh):
+            rejected += 1
+            continue
+        g = Glyph(ch, bmp, 1.0, top_px, "freeform" if direct else "freeform-sliced", sample_id)
+        g.x_height_px = lxh
+        res.glyphs.append(g)
+        aligned += 1
     if skipped:
         res.issues.append("could not match the words to the transcript on line(s) " + ", ".join(map(str, skipped)))
     if joined:

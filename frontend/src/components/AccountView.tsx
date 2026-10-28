@@ -5,6 +5,8 @@ import { useState } from "react";
 import { LogOut } from "lucide-react";
 import { api, errorMessage } from "@/lib/api";
 import { useUser } from "./AppShell";
+import { ModelRoutingSection } from "./ModelRoutingSection";
+import { SignatureSection } from "./SignatureSection";
 import { Button, ConfirmDialog, formatDate, LoadingBlock, Notice, PageHeader, Sheet, TextField } from "./ui";
 
 export function AccountView() {
@@ -62,6 +64,8 @@ export function AccountView() {
           </Button>
         </Sheet>
 
+        <SignatureSection />
+        <ModelRoutingSection />
         <Sheet title="Delete account">
           <p className="text-sm text-muted">
             Deleting your account permanently removes your handwriting profiles and samples, every assignment you

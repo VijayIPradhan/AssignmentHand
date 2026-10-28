@@ -1,8 +1,10 @@
+import logging
 import time
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import select, text
+from pydantic import BaseModel, Field
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.ai.providers import provider_status
@@ -68,6 +70,25 @@ def public_config():
         "max_pdf_pages": s.max_pdf_pages,
         "allow_registration": s.allow_registration,
         "ai": provider_status(),
+    }
+
+
+def _usage_month(db: Session, user_id: str) -> dict:
+    from app.ai.budget import budget_status, month_start
+    from app.models import LLMUsage
+
+    rows = db.execute(
+        select(
+            func.count(LLMUsage.id),
+            func.coalesce(func.sum(LLMUsage.cost_usd), 0.0),
+            func.coalesce(func.sum(LLMUsage.input_tokens + LLMUsage.output_tokens), 0),
+        ).where(LLMUsage.user_id == user_id, LLMUsage.created_at >= month_start())
+    ).one()
+    return {
+        "month_calls": int(rows[0]),
+        "month_cost_usd": round(float(rows[1]), 4),
+        "month_tokens": int(rows[2]),
+        "budget": budget_status(db, user_id),
     }
 
 
@@ -141,5 +162,35 @@ def dashboard(user: User = Depends(current_user), db: Session = Depends(get_db))
             }
             for r in exports
         ],
-        "ai": provider_status(),
+        "ai": provider_status(user.model_routing),
+        "usage": _usage_month(db, user.id),
     }
+
+
+class ClientLog(BaseModel):
+    level: str = Field("error", pattern="^(error|warning|info)$")
+    message: str = Field(max_length=2000)
+    stack: str | None = Field(None, max_length=8000)
+    url: str | None = Field(None, max_length=500)
+    source: str | None = Field(None, max_length=60)
+
+
+@router.post("/client-log", status_code=204)
+def client_log(body: ClientLog, request: Request):
+    """Browser-side errors (uncaught exceptions, failed API calls) reported by the frontend, so they
+    appear in the same logs as the server. Rate limited per client address."""
+    from app.ratelimit import check_rate
+
+    check_rate(request.client.host if request.client else "unknown", "client-log", 30)
+    clog = logging.getLogger("app.client")
+    clog.log(
+        {"error": logging.ERROR, "warning": logging.WARNING}.get(body.level, logging.INFO),
+        f"browser: {body.message[:300]}",
+        extra={
+            "page": (body.url or "")[:300] or None,
+            "source": body.source,
+            "stack": (body.stack or "")[:4000] or None,
+            "user_agent": (request.headers.get("user-agent") or "")[:200],
+            "client": request.client.host if request.client else None,
+        },
+    )

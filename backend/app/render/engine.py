@@ -33,6 +33,7 @@ class GlyphItem:
     rot: float = 0.0  # degrees, counter-clockwise
     shear: float = 0.0  # tan(slant offset), positive leans right
     weight: float = 1.0  # relative stroke weight for this glyph (multiplied with the document setting)
+    color: str | None = None  # overrides the document ink colour (e.g. a signature in its own colour)
 
 
 @dataclass
@@ -78,7 +79,7 @@ def shift_item(it: Item, dx: float, dy: float) -> Item:
     if isinstance(it, LineItem):
         return LineItem([(x + dx, y + dy) for x, y in it.pts], it.width)
     if isinstance(it, GlyphItem):
-        return GlyphItem(it.glyph, it.x + dx, it.y + dy, it.scale, it.rot, it.shear, it.weight)
+        return GlyphItem(it.glyph, it.x + dx, it.y + dy, it.scale, it.rot, it.shear, it.weight, it.color)
     if isinstance(it, FallbackItem):
         return FallbackItem(it.ch, it.x + dx, it.y + dy, it.size_mm, it.shear, it.rot, it.font)
     if isinstance(it, TofuItem):

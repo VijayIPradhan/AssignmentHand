@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { api, errorMessage } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { api, errorMessage, urls } from "@/lib/api";
 import { useResource } from "@/lib/hooks";
-import type { Profile, RenderSettings } from "@/lib/types";
+import type { AssignmentFields, Profile, RenderSettings } from "@/lib/types";
 import { StyleControls, type StyleValues } from "../StyleControls";
 import {
   Button,
@@ -303,6 +303,17 @@ function SettingsForm({ initial, hasSource }: { initial: RenderSettings; hasSour
         )}
       </Sheet>
 
+      {source && (
+        <FieldsSheet
+          s={s}
+          set={set}
+          setValues={(v) => {
+            setS((prev) => ({ ...prev, field_values: v }));
+            setState("dirty");
+          }}
+        />
+      )}
+
       <Sheet title="Handwriting style" description="Starts from the profile’s saved style; changes here apply to this assignment only.">
         <StyleControls
           value={style}
@@ -382,5 +393,97 @@ export function StepHandwriting() {
         </div>
       )}
     </div>
+  );
+}
+
+/** Fill-in fields printed on the original pages (Registration Number, signature lines, ...). */
+function FieldsSheet({
+  s,
+  setValues,
+  set,
+}: {
+  s: RenderSettings;
+  setValues: (v: Record<string, string>) => void;
+  set: <K extends keyof RenderSettings>(k: K, v: RenderSettings[K]) => void;
+}) {
+  const { a } = useWorkspace();
+  const info = useResource<AssignmentFields>(`fields:${a.id}`, () => api.assignmentFields(a.id));
+  const values = s.field_values ?? {};
+  const data = info.data;
+  const suggested = data && Object.keys(values).length === 0 ? data.suggestions : null;
+
+  useEffect(() => {
+    if (suggested && Object.keys(suggested).length) setValues(suggested);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- apply suggestions once, when they arrive
+  }, [data]);
+
+  if (info.loading && !data) return <LoadingBlock label="Looking for fields on the pages" />;
+  if (info.error && !data) return <ErrorState message={info.error} onRetry={() => void info.reload()} />;
+  if (!data || data.fields.length === 0) return null;
+  const textFields = data.fields.filter((f) => f.kind === "text");
+  const hasSignatureLine = data.fields.some((f) => f.kind === "signature");
+
+  return (
+    <Sheet title="Fields on the pages" description="Printed blanks such as “Registration Number: ____”, filled in your handwriting.">
+      <div className="flex flex-col gap-5">
+        {textFields.length > 0 && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {textFields.map((f) => (
+              <TextField
+                key={f.key}
+                label={f.label}
+                value={values[f.key] ?? ""}
+                maxLength={80}
+                placeholder="Leave empty to skip"
+                hint={`On page ${f.pages.join(", ")}${data.suggestions[f.key] ? " · suggested from the pages" : ""}`}
+                onChange={(e) => setValues({ ...values, [f.key]: e.target.value })}
+              />
+            ))}
+          </div>
+        )}
+        {hasSignatureLine && (
+          <div className="flex flex-col gap-3">
+            {data.signature_available ? (
+              <>
+                <Checkbox label="Sign the pages with my signature" checked={!!s.sign_fields} onChange={(v) => set("sign_fields", v)} />
+                {s.sign_fields && (
+                  <div className="flex flex-wrap items-end gap-5">
+                    <div className="rounded-[5px] border border-line bg-white px-3 py-2">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- private, authenticated image */}
+                      <img src={urls.signaturePreview(s.signature_color)} alt="Your signature preview" className="h-12 w-auto" />
+                    </div>
+                    <label className="flex flex-col gap-1.5 text-[13px] font-medium">
+                      Signature ink
+                      <input
+                        type="color"
+                        value={s.signature_color}
+                        onChange={(e) => set("signature_color", e.target.value)}
+                        className="h-10 w-14 rounded border border-line-strong bg-sheet p-1"
+                      />
+                    </label>
+                    <div className="w-56">
+                      <Slider
+                        label="Signature height"
+                        min={6}
+                        max={20}
+                        step={0.5}
+                        value={s.signature_height_mm}
+                        onChange={(v) => set("signature_height_mm", v)}
+                        format={(v) => `${v} mm`}
+                      />
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <Notice tone="neutral">
+                The pages have a signature line. Add your signature on the <a className="underline" href="/account">Account</a>{" "}
+                page to sign them here.
+              </Notice>
+            )}
+          </div>
+        )}
+      </div>
+    </Sheet>
   );
 }

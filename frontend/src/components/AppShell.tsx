@@ -18,6 +18,7 @@ const NAV = [
   { href: "/", label: "Dashboard", match: (p: string) => p === "/" },
   { href: "/assignments", label: "Assignments", match: (p: string) => p.startsWith("/assignments") },
   { href: "/profiles", label: "Handwriting", match: (p: string) => p.startsWith("/profiles") },
+  { href: "/usage", label: "AI usage", match: (p: string) => p.startsWith("/usage") },
   { href: "/account", label: "Account", match: (p: string) => p.startsWith("/account") },
 ];
 

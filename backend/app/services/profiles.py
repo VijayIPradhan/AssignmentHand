@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.handwriting.glyphs import GlyphLibrary
 from app.handwriting.preprocess import SampleImageError, load_image
 from app.handwriting.profile_builder import SampleInput, build_library
+from app.logging_setup import Timer
 from app.models import HandwritingProfile, ProfileStatus, SampleStatus
 from app.render.engine import EngineStyle, GlyphCompositingEngine
 from app.render.layout import Layouter, SectionInput
@@ -53,6 +54,51 @@ def forget_library(profile_id: str) -> None:
             del _LIB_CACHE[k]
 
 
+def _glyph_key(g) -> str:
+    import hashlib
+
+    return hashlib.sha1(g.char.encode() + g.bitmap.tobytes() + str(g.bitmap.shape).encode()).hexdigest()
+
+
+def cached_verify(profile: HandwritingProfile, candidates: dict, verify, progress) -> dict | None:
+    """AI letter verification with a per-profile cache of verdicts.
+
+    Letter cutting is deterministic, so a crop seen before (same character, same pixels) keeps its
+    verdict; only new crops are sent to the model. Re-processing after adding one photo therefore
+    checks only that photo's letters instead of every letter again."""
+    import json
+
+    storage = get_storage()
+    key = f"{profile_prefix(profile)}/verify_cache.json"
+    try:
+        cache: dict[str, bool] = json.loads(storage.get(key)) if storage.exists(key) else {}
+    except (ValueError, OSError):
+        cache = {}
+    todo = {ch: [g for g in gs if _glyph_key(g) not in cache] for ch, gs in candidates.items()}
+    todo = {ch: gs for ch, gs in todo.items() if gs}
+    n_new = sum(len(v) for v in todo.values())
+    if n_new:
+        progress(0.6, f"Checking {n_new} new cut-out letters with AI")
+        checked = verify(todo)
+        if checked is None:
+            if not cache:
+                return None  # verification unavailable and nothing cached: fall back to geometry only
+            # Keep this run's new letters unverified (geometric checks still apply); retry next time.
+            unverified = {id(g) for gs in todo.values() for g in gs}
+            return {
+                ch: [g for g in gs if id(g) in unverified or cache.get(_glyph_key(g), False)]
+                for ch, gs in candidates.items()
+            }
+        else:
+            for ch, gs in todo.items():
+                kept = {id(g) for g in checked.get(ch, [])}
+                for g in gs:
+                    cache[_glyph_key(g)] = id(g) in kept
+            storage.put(key, json.dumps(cache).encode())
+    log.info("letter verification", extra={"new": n_new, "cached": sum(len(v) for v in candidates.values()) - n_new})
+    return {ch: [g for g in gs if cache.get(_glyph_key(g), False)] for ch, gs in candidates.items()}
+
+
 def process_profile(db: Session, profile: HandwritingProfile, progress) -> dict:
     storage = get_storage()
     samples = list(profile.samples)
@@ -78,14 +124,53 @@ def process_profile(db: Session, profile: HandwritingProfile, progress) -> dict:
         from app.handwriting.verify import verify_with_model
 
         if provider_configured():
-            provider = get_provider("verify")
+            from sqlalchemy.orm import object_session
+
+            from app.models import User
+
+            owner = object_session(profile).get(User, profile.user_id)
+            provider = get_provider("verify", owner.model_routing if owner else None)
 
             def verifier(cands):
-                progress(0.6, "Checking cut-out letters with AI")
-                return verify_with_model(provider, cands)
+                from app.ai.usage import usage_scope
 
-    result = build_library(inputs, verifier)
+                with usage_scope(profile.user_id, "verify", profile_id=profile.id):
+                    return cached_verify(profile, cands, lambda todo: verify_with_model(provider, todo), progress)
+
+    with Timer() as t_build:
+        result = build_library(inputs, verifier)
     by_id = {s.id: s for s in samples}
+    for o in result.samples:
+        q = o.quality or {}
+        info = q.get("info", {})
+        issues = [i.removeprefix("fatal:") for i in q.get("issues", [])]
+        log.log(
+            logging.INFO if o.status == "processed" else logging.WARNING,
+            f"sample {by_id[o.id].original_filename}: {o.status}",
+            extra={
+                "sample_id": o.id,
+                "kind": info.get("kind"),
+                "lines": (info.get("metrics") or {}).get("lines"),
+                "aligned": info.get("aligned_glyphs"),
+                "rejected": info.get("rejected_glyphs"),
+                "sliced_words": info.get("sliced_words"),
+                "rules": info.get("rules"),
+                "template_page": info.get("page"),
+                "issues": issues or None,
+            },
+        )
+    rep = result.report
+    log.info(
+        f"profile built: {len(result.library.glyphs)} characters, {sum(len(v) for v in result.library.glyphs.values())} glyphs",
+        extra={
+            "ready": result.ready,
+            "missing": {k: v for k, v in rep.get("missing", {}).items() if v} or None,
+            "derived": rep.get("derived_letters") or None,
+            "ai_verified": rep.get("ai_verified_letters"),
+            "build_ms": t_build.ms,
+            "samples": len(inputs),
+        },
+    )
     for o in result.samples:
         s = by_id[o.id]
         s.status = SampleStatus.processed if o.status == "processed" else SampleStatus.rejected

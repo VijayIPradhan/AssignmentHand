@@ -124,6 +124,20 @@ def add_derived(lib: GlyphLibrary) -> list[str]:
     return made
 
 
+MID_HEIGHT_MARKS = "-=+~×÷"
+
+
+def centre_mid_height_marks(lib: GlyphLibrary) -> None:
+    """Hyphens and similar marks always sit at about half the x-height. In free-form samples their
+    vertical position is ambiguous (e.g. written on a punctuation-only line), so place them there."""
+    for ch in MID_HEIGHT_MARKS:
+        for g in lib.variants(ch):
+            if g.source == "template":
+                continue  # the template's printed baseline already fixes their position
+            g.baseline_px = g.bitmap.shape[0] / 2 + 0.45 * lib.x_height_mm * g.px_per_mm
+            g._outlines.clear()
+
+
 def _drop_outliers(lib: GlyphLibrary) -> list[str]:
     dropped = []
     for ch, variants in list(lib.glyphs.items()):
@@ -170,6 +184,12 @@ def build_library(samples: list[SampleInput], verifier=None) -> BuildResult:
         for g in seg.glyphs:
             g.px_per_mm = (g.x_height_px or xh_px) / lib.x_height_mm
             ff_by_char.setdefault(g.char, []).append(g)
+    # A letter written on its own is far more reliable than one cut out of a joined word: when a
+    # character has separately written samples, the automatically sliced ones are not used.
+    for ch, gs in ff_by_char.items():
+        direct = [g for g in gs if g.source == "freeform"]
+        if direct:
+            ff_by_char[ch] = direct
     verified = False
     if verifier is not None and ff_by_char:
         # Pre-select the most self-consistent candidates so the sheets stay small.
@@ -193,6 +213,7 @@ def build_library(samples: list[SampleInput], verifier=None) -> BuildResult:
             setattr(lib, key, float(np.clip(v, 0.05, 6.0)))
     dropped = _drop_outliers(lib)
     derived = add_derived(lib)
+    centre_mid_height_marks(lib)
     has_template_slant = templates and any(lib.variants(c) for c in "bdfhkltI1")
     lib.compute_metrics()
     if not has_template_slant and (v := _med("slant_deg")) is not None:

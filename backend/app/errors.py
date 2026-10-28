@@ -66,11 +66,21 @@ def _body(code: str, message: str, details=None) -> dict:
 
 def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
-    async def _app_error(_req: Request, exc: AppError):
+    async def _app_error(req: Request, exc: AppError):
+        # Messages of AppError are written for users and contain no document content.
+        log.log(
+            logging.ERROR if exc.status_code >= 500 else logging.INFO,
+            f"{exc.code}: {exc.message}",
+            extra={"error_code": exc.code, "status": exc.status_code, "path": req.url.path},
+        )
         return JSONResponse(_body(exc.code, exc.message, exc.details), status_code=exc.status_code)
 
     @app.exception_handler(RequestValidationError)
-    async def _validation(_req: Request, exc: RequestValidationError):
+    async def _validation(req: Request, exc: RequestValidationError):
+        log.info(
+            "validation error",
+            extra={"path": req.url.path, "fields": [".".join(map(str, e.get("loc", []))) for e in exc.errors()][:10]},
+        )
         details = [{"loc": list(e.get("loc", [])), "msg": e.get("msg"), "type": e.get("type")} for e in exc.errors()]
         return JSONResponse(_body("validation_error", "Invalid request", details), status_code=422)
 

@@ -13,6 +13,31 @@ class ORM(BaseModel):
 # ---------------------------------------------------------------- auth
 
 
+class ModelRoutingIn(BaseModel):
+    routing: dict[str, str | None] = Field(default_factory=dict, max_length=10)
+
+
+class ModelRoutingTask(BaseModel):
+    task: str
+    label: str
+    description: str
+    model: str
+    default: str
+    custom: bool
+
+
+class ModelChoice(BaseModel):
+    model: str
+    input_per_mtok: float | None
+    output_per_mtok: float | None
+
+
+class ModelRoutingOut(BaseModel):
+    tasks: list[ModelRoutingTask]
+    choices: list[ModelChoice]
+    fallback: str  # a lighter model that fails is retried once on this one
+
+
 class Credentials(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=200)
@@ -45,6 +70,7 @@ class JobOut(ORM):
     attempts: int
     max_attempts: int
     result: dict
+    events: list = []
     assignment_id: str | None
     profile_id: str | None
     created_at: datetime
@@ -136,6 +162,7 @@ class AssignmentUpdate(BaseModel):
     subject: str | None = Field(None, max_length=120)
     instructions: str | None = Field(None, max_length=10_000)
     preferences: AnswerPrefsIn | None = None
+    clear_preference_overrides: bool = False  # use the global preferences for this assignment again
     profile_id: str | None = None
 
 
@@ -258,6 +285,7 @@ class AssignmentDetail(AssignmentOut):
     questions: list[QuestionOut] = []
     rendered: list[RenderedOut] = []
     render_settings: dict[str, Any] = {}
+    effective_preferences: dict[str, Any] = {}  # global preferences merged with this assignment's overrides
     active_jobs: list[JobOut] = []
     stats: dict[str, Any] = {}
 

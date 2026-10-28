@@ -129,6 +129,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/client-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Client Log
+         * @description Browser-side errors (uncaught exceptions, failed API calls) reported by the frontend, so they
+         *     appear in the same logs as the server. Rate limited per client address.
+         */
+        post: operations["client_log_api_v1_client_log_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/register": {
         parameters: {
             query?: never;
@@ -196,6 +217,54 @@ export interface paths {
          * @description Delete the account and every file, profile, assignment and export it owns.
          */
         delete: operations["delete_me_api_v1_auth_me_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Preferences
+         * @description Answer preferences used by all your assignments (defaults filled in).
+         */
+        get: operations["get_preferences_api_v1_auth_preferences_get"];
+        /**
+         * Put Preferences
+         * @description Set the answer preferences for all your assignments. The subject stays per assignment.
+         */
+        put: operations["put_preferences_api_v1_auth_preferences_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/model-routing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Model Routing
+         * @description Which AI model does each kind of work for your account.
+         */
+        get: operations["get_model_routing_api_v1_auth_model_routing_get"];
+        /**
+         * Put Model Routing
+         * @description Choose a model per task; null or an empty string goes back to the server default.
+         */
+        put: operations["put_model_routing_api_v1_auth_model_routing_put"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -532,7 +601,8 @@ export interface paths {
         put?: never;
         /**
          * Re Extract
-         * @description Re-run extraction. Questions you added manually are kept; extracted ones are replaced.
+         * @description Re-read the PDF. Questions with answers (and your own added questions) are kept: their page
+         *     layout is refreshed and their text, marks and answers are left as they are.
          */
         post: operations["re_extract_api_v1_assignments__aid__extract_post"];
         delete?: never;
@@ -900,6 +970,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Usage Summary
+         * @description AI usage for the signed-in user: totals, breakdowns by model/task/day/assignment, recent calls,
+         *     pricing in effect and the monthly budget. Costs for cloud (e.g. Bedrock) model ids priced from
+         *     Anthropic list prices are flagged ``estimated``.
+         */
+        get: operations["usage_summary_api_v1_usage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/signature": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Signature
+         * @description Whether you have uploaded a signature (and its size).
+         */
+        get: operations["get_signature_api_v1_signature_get"];
+        put?: never;
+        /**
+         * Upload Signature
+         * @description Upload your signature. The paper background is removed and only the ink is kept. It is placed
+         *     on signature lines only when you turn on "Sign the pages" for an assignment.
+         */
+        post: operations["upload_signature_api_v1_signature_post"];
+        /** Delete Signature */
+        delete: operations["delete_signature_api_v1_signature_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/signature/preview.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Signature Preview */
+        get: operations["signature_preview_api_v1_signature_preview_png_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assignments/{aid}/fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Assignment Fields
+         * @description Fill-in fields printed on the original pages (e.g. "Registration Number: ____", signature lines),
+         *     with suggested values found on the pages.
+         */
+        get: operations["assignment_fields_api_v1_assignments__aid__fields_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1023,6 +1179,13 @@ export interface components {
                 [key: string]: unknown;
             };
             /**
+             * Effective Preferences
+             * @default {}
+             */
+            effective_preferences: {
+                [key: string]: unknown;
+            };
+            /**
              * Active Jobs
              * @default []
              */
@@ -1077,6 +1240,11 @@ export interface components {
             /** Instructions */
             instructions?: string | null;
             preferences?: components["schemas"]["AnswerPrefsIn"] | null;
+            /**
+             * Clear Preference Overrides
+             * @default false
+             */
+            clear_preference_overrides: boolean;
             /** Profile Id */
             profile_id?: string | null;
         };
@@ -1110,6 +1278,35 @@ export interface components {
             transcript?: string | null;
             /** Template Page */
             template_page?: number | null;
+        };
+        /** Body_upload_signature_api_v1_signature_post */
+        Body_upload_signature_api_v1_signature_post: {
+            /**
+             * File
+             * @description Photo or scan of your own signature (JPG/PNG)
+             */
+            file: string;
+            /**
+             * Rotate
+             * @default 0
+             */
+            rotate: number;
+        };
+        /** ClientLog */
+        ClientLog: {
+            /**
+             * Level
+             * @default error
+             */
+            level: string;
+            /** Message */
+            message: string;
+            /** Stack */
+            stack?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Source */
+            source?: string | null;
         };
         /** Credentials */
         Credentials: {
@@ -1183,6 +1380,11 @@ export interface components {
             result: {
                 [key: string]: unknown;
             };
+            /**
+             * Events
+             * @default []
+             */
+            events: unknown[];
             /** Assignment Id */
             assignment_id: string | null;
             /** Profile Id */
@@ -1222,6 +1424,46 @@ export interface components {
         MergeIn: {
             /** Ids */
             ids: string[];
+        };
+        /** ModelChoice */
+        ModelChoice: {
+            /** Model */
+            model: string;
+            /** Input Per Mtok */
+            input_per_mtok: number | null;
+            /** Output Per Mtok */
+            output_per_mtok: number | null;
+        };
+        /** ModelRoutingIn */
+        ModelRoutingIn: {
+            /** Routing */
+            routing?: {
+                [key: string]: string | null;
+            };
+        };
+        /** ModelRoutingOut */
+        ModelRoutingOut: {
+            /** Tasks */
+            tasks: components["schemas"]["ModelRoutingTask"][];
+            /** Choices */
+            choices: components["schemas"]["ModelChoice"][];
+            /** Fallback */
+            fallback: string;
+        };
+        /** ModelRoutingTask */
+        ModelRoutingTask: {
+            /** Task */
+            task: string;
+            /** Label */
+            label: string;
+            /** Description */
+            description: string;
+            /** Model */
+            model: string;
+            /** Default */
+            default: string;
+            /** Custom */
+            custom: boolean;
         };
         /** PreviewIn */
         PreviewIn: {
@@ -1514,6 +1756,22 @@ export interface components {
              * @enum {string}
              */
             extra_page_paper: "ruled" | "blank" | "grid";
+            /** Field Values */
+            field_values?: {
+                [key: string]: string;
+            };
+            /** Sign Fields */
+            sign_fields?: boolean | null;
+            /**
+             * Signature Color
+             * @default #1f3a93
+             */
+            signature_color: string;
+            /**
+             * Signature Height Mm
+             * @default 11
+             */
+            signature_height_mm: number;
         };
         /** RenderedOut */
         RenderedOut: {
@@ -1585,6 +1843,11 @@ export interface components {
             rotate?: number | null;
             /** Crop */
             crop?: number[] | null;
+            /**
+             * Clear Crop
+             * @default false
+             */
+            clear_crop: boolean;
             /** Template Page */
             template_page?: number | null;
         };
@@ -1838,6 +2101,37 @@ export interface operations {
             };
         };
     };
+    client_log_api_v1_client_log_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientLog"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     register_api_v1_auth_register_post: {
         parameters: {
             query?: never;
@@ -1957,6 +2251,112 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    get_preferences_api_v1_auth_preferences_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    put_preferences_api_v1_auth_preferences_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerPrefsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_model_routing_api_v1_auth_model_routing_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelRoutingOut"];
+                };
+            };
+        };
+    };
+    put_model_routing_api_v1_auth_model_routing_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelRoutingIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelRoutingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -3490,6 +3890,169 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RenderedOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    usage_summary_api_v1_usage_get: {
+        parameters: {
+            query?: {
+                days?: number;
+                recent?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_signature_api_v1_signature_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    upload_signature_api_v1_signature_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_signature_api_v1_signature_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_signature_api_v1_signature_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    signature_preview_api_v1_signature_preview_png_get: {
+        parameters: {
+            query?: {
+                color?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assignment_fields_api_v1_assignments__aid__fields_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

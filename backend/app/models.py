@@ -86,6 +86,10 @@ class User(TimestampMixin, Base):
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str | None] = mapped_column(String(120))
+    # Answer preferences shared by all of the user's assignments (an assignment may override keys)
+    answer_preferences: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # Per-task model choice ({task: model}); a missing task uses the server default (LLM_MODEL_*)
+    model_routing: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
 
 
 class HandwritingProfile(TimestampMixin, Base):
@@ -298,6 +302,8 @@ class ProcessingJob(TimestampMixin, Base):
     locked_by: Mapped[str | None] = mapped_column(String(64))
     locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Timeline of steps, retries and errors shown to the user: [{"at", "level", "msg", ...}]
+    events: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     assignment_id: Mapped[str | None] = mapped_column(ForeignKey("assignments.id", ondelete="CASCADE"), index=True)
     profile_id: Mapped[str | None] = mapped_column(
         ForeignKey("handwriting_profiles.id", ondelete="CASCADE"), index=True
@@ -306,6 +312,36 @@ class ProcessingJob(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_jobs_claim", "status", "run_after"),
         Index("ix_jobs_user", "user_id", "created_at"),
+    )
+
+
+class LLMUsage(Base):
+    """One AI provider call: what it was for, which model served it, tokens, latency, outcome, cost."""
+
+    __tablename__ = "llm_usage"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    # Kept (set to NULL) when the assignment/profile is deleted, so spending history stays accurate
+    assignment_id: Mapped[str | None] = mapped_column(ForeignKey("assignments.id", ondelete="SET NULL"))
+    profile_id: Mapped[str | None] = mapped_column(ForeignKey("handwriting_profiles.id", ondelete="SET NULL"))
+    question_id: Mapped[str | None] = mapped_column(String(32))
+    task: Mapped[str] = mapped_column(String(24), nullable=False)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    model: Mapped[str] = mapped_column(String(120), nullable=False)
+    served_model: Mapped[str | None] = mapped_column(String(120))
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)  # ok | error
+    error_type: Mapped[str | None] = mapped_column(String(64))
+    cost_usd: Mapped[float | None] = mapped_column(Float)
+    pricing_source: Mapped[str] = mapped_column(String(24), default="unknown", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    __table_args__ = (
+        Index("ix_llm_usage_user_time", "user_id", "created_at"),
+        Index("ix_llm_usage_assignment", "assignment_id"),
     )
 
 
@@ -318,6 +354,7 @@ __all__ = [
     "HandwritingProfile",
     "HandwritingSample",
     "JobStatus",
+    "LLMUsage",
     "ProcessingJob",
     "ProfileStatus",
     "RenderConfiguration",

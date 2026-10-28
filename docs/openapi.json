@@ -259,6 +259,41 @@
     }
    }
   },
+  "/api/v1/client-log": {
+   "post": {
+    "tags": [
+     "system"
+    ],
+    "summary": "Client Log",
+    "description": "Browser-side errors (uncaught exceptions, failed API calls) reported by the frontend, so they\nappear in the same logs as the server. Rate limited per client address.",
+    "operationId": "client_log_api_v1_client_log_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ClientLog"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/v1/auth/register": {
    "post": {
     "tags": [
@@ -385,6 +420,126 @@
     "responses": {
      "204": {
       "description": "Successful Response"
+     }
+    }
+   }
+  },
+  "/api/v1/auth/preferences": {
+   "get": {
+    "tags": [
+     "auth"
+    ],
+    "summary": "Get Preferences",
+    "description": "Answer preferences used by all your assignments (defaults filled in).",
+    "operationId": "get_preferences_api_v1_auth_preferences_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   },
+   "put": {
+    "tags": [
+     "auth"
+    ],
+    "summary": "Put Preferences",
+    "description": "Set the answer preferences for all your assignments. The subject stays per assignment.",
+    "operationId": "put_preferences_api_v1_auth_preferences_put",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AnswerPrefsIn"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/auth/model-routing": {
+   "get": {
+    "tags": [
+     "auth"
+    ],
+    "summary": "Get Model Routing",
+    "description": "Which AI model does each kind of work for your account.",
+    "operationId": "get_model_routing_api_v1_auth_model_routing_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ModelRoutingOut"
+        }
+       }
+      }
+     }
+    }
+   },
+   "put": {
+    "tags": [
+     "auth"
+    ],
+    "summary": "Put Model Routing",
+    "description": "Choose a model per task; null or an empty string goes back to the server default.",
+    "operationId": "put_model_routing_api_v1_auth_model_routing_put",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ModelRoutingIn"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ModelRoutingOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
      }
     }
    }
@@ -1428,7 +1583,7 @@
      "assignments"
     ],
     "summary": "Re Extract",
-    "description": "Re-run extraction. Questions you added manually are kept; extracted ones are replaced.",
+    "description": "Re-read the PDF. Questions with answers (and your own added questions) are kept: their page\nlayout is refreshed and their text, marks and answers are left as they are.",
     "operationId": "re_extract_api_v1_assignments__aid__extract_post",
     "parameters": [
      {
@@ -2591,6 +2746,210 @@
      }
     }
    }
+  },
+  "/api/v1/usage": {
+   "get": {
+    "tags": [
+     "usage"
+    ],
+    "summary": "Usage Summary",
+    "description": "AI usage for the signed-in user: totals, breakdowns by model/task/day/assignment, recent calls,\npricing in effect and the monthly budget. Costs for cloud (e.g. Bedrock) model ids priced from\nAnthropic list prices are flagged ``estimated``.",
+    "operationId": "usage_summary_api_v1_usage_get",
+    "parameters": [
+     {
+      "name": "days",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 366,
+       "minimum": 1,
+       "default": 30,
+       "title": "Days"
+      }
+     },
+     {
+      "name": "recent",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 500,
+       "minimum": 0,
+       "default": 50,
+       "title": "Recent"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/signature": {
+   "get": {
+    "tags": [
+     "signature"
+    ],
+    "summary": "Get Signature",
+    "description": "Whether you have uploaded a signature (and its size).",
+    "operationId": "get_signature_api_v1_signature_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "signature"
+    ],
+    "summary": "Upload Signature",
+    "description": "Upload your signature. The paper background is removed and only the ink is kept. It is placed\non signature lines only when you turn on \"Sign the pages\" for an assignment.",
+    "operationId": "upload_signature_api_v1_signature_post",
+    "requestBody": {
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_upload_signature_api_v1_signature_post"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "tags": [
+     "signature"
+    ],
+    "summary": "Delete Signature",
+    "operationId": "delete_signature_api_v1_signature_delete",
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     }
+    }
+   }
+  },
+  "/api/v1/signature/preview.png": {
+   "get": {
+    "tags": [
+     "signature"
+    ],
+    "summary": "Signature Preview",
+    "operationId": "signature_preview_api_v1_signature_preview_png_get",
+    "parameters": [
+     {
+      "name": "color",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "pattern": "^#[0-9a-fA-F]{6}$",
+       "default": "#1f3a93",
+       "title": "Color"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assignments/{aid}/fields": {
+   "get": {
+    "tags": [
+     "signature"
+    ],
+    "summary": "Assignment Fields",
+    "description": "Fill-in fields printed on the original pages (e.g. \"Registration Number: ____\", signature lines),\nwith suggested values found on the pages.",
+    "operationId": "assignment_fields_api_v1_assignments__aid__fields_get",
+    "parameters": [
+     {
+      "name": "aid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Aid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
   }
  },
  "components": {
@@ -2956,6 +3315,12 @@
       "title": "Render Settings",
       "default": {}
      },
+     "effective_preferences": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Effective Preferences",
+      "default": {}
+     },
      "active_jobs": {
       "items": {
        "$ref": "#/components/schemas/JobOut"
@@ -3130,6 +3495,11 @@
        }
       ]
      },
+     "clear_preference_overrides": {
+      "type": "boolean",
+      "title": "Clear Preference Overrides",
+      "default": false
+     },
      "profile_id": {
       "anyOf": [
        {
@@ -3242,6 +3612,84 @@
      "file"
     ],
     "title": "Body_upload_sample_api_v1_profiles__pid__samples_post"
+   },
+   "Body_upload_signature_api_v1_signature_post": {
+    "properties": {
+     "file": {
+      "type": "string",
+      "contentMediaType": "application/octet-stream",
+      "title": "File",
+      "description": "Photo or scan of your own signature (JPG/PNG)"
+     },
+     "rotate": {
+      "type": "number",
+      "maximum": 360.0,
+      "minimum": -360.0,
+      "title": "Rotate",
+      "default": 0
+     }
+    },
+    "type": "object",
+    "required": [
+     "file"
+    ],
+    "title": "Body_upload_signature_api_v1_signature_post"
+   },
+   "ClientLog": {
+    "properties": {
+     "level": {
+      "type": "string",
+      "pattern": "^(error|warning|info)$",
+      "title": "Level",
+      "default": "error"
+     },
+     "message": {
+      "type": "string",
+      "maxLength": 2000,
+      "title": "Message"
+     },
+     "stack": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 8000
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Stack"
+     },
+     "url": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 500
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Url"
+     },
+     "source": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 60
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Source"
+     }
+    },
+    "type": "object",
+    "required": [
+     "message"
+    ],
+    "title": "ClientLog"
    },
    "Credentials": {
     "properties": {
@@ -3422,6 +3870,12 @@
       "type": "object",
       "title": "Result"
      },
+     "events": {
+      "items": {},
+      "type": "array",
+      "title": "Events",
+      "default": []
+     },
      "assignment_id": {
       "anyOf": [
        {
@@ -3531,6 +3985,131 @@
      "ids"
     ],
     "title": "MergeIn"
+   },
+   "ModelChoice": {
+    "properties": {
+     "model": {
+      "type": "string",
+      "title": "Model"
+     },
+     "input_per_mtok": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Input Per Mtok"
+     },
+     "output_per_mtok": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Output Per Mtok"
+     }
+    },
+    "type": "object",
+    "required": [
+     "model",
+     "input_per_mtok",
+     "output_per_mtok"
+    ],
+    "title": "ModelChoice"
+   },
+   "ModelRoutingIn": {
+    "properties": {
+     "routing": {
+      "additionalProperties": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ]
+      },
+      "type": "object",
+      "maxProperties": 10,
+      "title": "Routing"
+     }
+    },
+    "type": "object",
+    "title": "ModelRoutingIn"
+   },
+   "ModelRoutingOut": {
+    "properties": {
+     "tasks": {
+      "items": {
+       "$ref": "#/components/schemas/ModelRoutingTask"
+      },
+      "type": "array",
+      "title": "Tasks"
+     },
+     "choices": {
+      "items": {
+       "$ref": "#/components/schemas/ModelChoice"
+      },
+      "type": "array",
+      "title": "Choices"
+     },
+     "fallback": {
+      "type": "string",
+      "title": "Fallback"
+     }
+    },
+    "type": "object",
+    "required": [
+     "tasks",
+     "choices",
+     "fallback"
+    ],
+    "title": "ModelRoutingOut"
+   },
+   "ModelRoutingTask": {
+    "properties": {
+     "task": {
+      "type": "string",
+      "title": "Task"
+     },
+     "label": {
+      "type": "string",
+      "title": "Label"
+     },
+     "description": {
+      "type": "string",
+      "title": "Description"
+     },
+     "model": {
+      "type": "string",
+      "title": "Model"
+     },
+     "default": {
+      "type": "string",
+      "title": "Default"
+     },
+     "custom": {
+      "type": "boolean",
+      "title": "Custom"
+     }
+    },
+    "type": "object",
+    "required": [
+     "task",
+     "label",
+     "description",
+     "model",
+     "default",
+     "custom"
+    ],
+    "title": "ModelRoutingTask"
    },
    "PreviewIn": {
     "properties": {
@@ -4167,6 +4746,37 @@
       ],
       "title": "Extra Page Paper",
       "default": "ruled"
+     },
+     "field_values": {
+      "additionalProperties": {
+       "type": "string"
+      },
+      "type": "object",
+      "maxProperties": 30,
+      "title": "Field Values"
+     },
+     "sign_fields": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sign Fields"
+     },
+     "signature_color": {
+      "type": "string",
+      "title": "Signature Color",
+      "default": "#1f3a93"
+     },
+     "signature_height_mm": {
+      "type": "number",
+      "maximum": 30.0,
+      "minimum": 4.0,
+      "title": "Signature Height Mm",
+      "default": 11.0
      }
     },
     "type": "object",
@@ -4370,6 +4980,11 @@
        }
       ],
       "title": "Crop"
+     },
+     "clear_crop": {
+      "type": "boolean",
+      "title": "Clear Crop",
+      "default": false
      },
      "template_page": {
       "anyOf": [

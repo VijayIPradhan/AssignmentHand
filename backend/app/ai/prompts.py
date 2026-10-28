@@ -82,6 +82,13 @@ Formatting (the renderer supports only this):
 - Do not restate the question or number the answer; the question number is written separately."""
 
 
+def min_words(words: int) -> int:
+    """Shortest acceptable answer for a target (LLM_MIN_LENGTH_RATIO, default 95%)."""
+    from app.config import get_settings
+
+    return int(words * get_settings().llm_min_length_ratio)
+
+
 def target_words(prefs: AnswerPreferences, marks: float | None) -> int:
     if prefs.target_words:
         return prefs.target_words
@@ -118,9 +125,9 @@ def build_user_prompt(
         f"Technical depth: {prefs.technical_depth}",
         f"Language for the answer: {prefs.language}",
         f"Tone: {prefs.tone}",
-        f"Target length: about {words} words (stay within roughly 20% of this)."
+        f"Length: {words} words. Write at least {min_words(words)} words and no more than {words}."
         if not max_words
-        else f"Target length: about {words} words. Hard limit: {max_words} words - the answer is handwritten into a "
+        else f"Length: {words} words - write at least {min_words(words)} words. Hard limit: {max_words} words - the answer is handwritten into a "
         "fixed space on the answer sheet and anything longer will not fit. Prefer fewer, well-developed points "
         "written as compact paragraphs; avoid one-line bullet points and headings, which waste space.",
         f"Marks available: {marks:g}" if marks else "Marks available: not stated",

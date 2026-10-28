@@ -7,6 +7,7 @@ normalised into a small hierarchy so the job runner can decide what to retry.
 import base64
 import json
 import logging
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import lru_cache
@@ -14,6 +15,7 @@ from pathlib import Path
 
 import httpx
 
+from app.ai.usage import record
 from app.config import get_settings
 
 log = logging.getLogger(__name__)
@@ -148,6 +150,20 @@ class AnthropicProvider(LLMProvider):
                 **({"format": output_format} if output_format else {}),
             },
         }
+        started = time.monotonic()
+
+        def _rec(status, served=None, tin=0, tout=0, error=None):
+            record(
+                provider=self.name,
+                model=self.model,
+                served_model=served,
+                input_tokens=tin,
+                output_tokens=tout,
+                latency_ms=int((time.monotonic() - started) * 1000),
+                status=status,
+                error_type=error,
+            )
+
         try:
             if self.fallback_mode == "server":
                 # Server-side refusal fallback: a declined request is retried on Anthropic's
@@ -164,6 +180,27 @@ class AnthropicProvider(LLMProvider):
             else:
                 with self.client.messages.stream(**params) as stream:
                     msg = stream.get_final_message()
+        except Exception as exc:
+            _rec("error", error=type(exc).__name__)
+            self._raise_mapped(exc)
+        usage = msg.usage
+        tin = int(getattr(usage, "input_tokens", 0) or 0)
+        tout = int(getattr(usage, "output_tokens", 0) or 0)
+        if msg.stop_reason in ("refusal", "max_tokens"):
+            _rec("error", msg.model, tin, tout, msg.stop_reason)
+        else:
+            _rec("ok", msg.model, tin, tout)
+        if msg.stop_reason == "refusal":
+            raise LLMRefusal("The model declined to answer this question")
+        if msg.stop_reason == "max_tokens":
+            raise LLMInvalidOutput("The answer was cut off (output limit reached)")
+        text = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
+        return text, msg.model, tin, tout
+
+    def _raise_mapped(self, exc: Exception):
+        a = self._anthropic
+        try:
+            raise exc
         except a.AuthenticationError as exc:
             raise LLMConfigError("The Anthropic API key was rejected") from exc
         except a.PermissionDeniedError as exc:
@@ -180,18 +217,6 @@ class AnthropicProvider(LLMProvider):
             raise LLMError(f"Anthropic API error {exc.status_code}") from exc
         except a.AnthropicError as exc:  # credentials could not be resolved, etc.
             raise LLMConfigError(f"{self.name} credentials are not configured") from exc
-        if msg.stop_reason == "refusal":
-            raise LLMRefusal("The model declined to answer this question")
-        if msg.stop_reason == "max_tokens":
-            raise LLMInvalidOutput("The answer was cut off (output limit reached)")
-        text = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
-        usage = msg.usage
-        return (
-            text,
-            msg.model,
-            int(getattr(usage, "input_tokens", 0) or 0),
-            int(getattr(usage, "output_tokens", 0) or 0),
-        )
 
     def complete_json(self, system, user, schema, *, max_tokens=16000, images=None, effort=None) -> LLMResult:
         text, model, tin, tout = self._call(
@@ -256,6 +281,34 @@ class OpenAICompatibleProvider(LLMProvider):
         self.retries = s.llm_max_retries
 
     def _post(self, body: dict) -> dict:
+        started = time.monotonic()
+        try:
+            data = self._post_raw(body)
+        except Exception as exc:
+            record(
+                provider=self.name,
+                model=self.model,
+                served_model=None,
+                input_tokens=0,
+                output_tokens=0,
+                latency_ms=int((time.monotonic() - started) * 1000),
+                status="error",
+                error_type=type(exc).__name__,
+            )
+            raise
+        u = data.get("usage") or {}
+        record(
+            provider=self.name,
+            model=self.model,
+            served_model=data.get("model"),
+            input_tokens=int(u.get("prompt_tokens", 0) or 0),
+            output_tokens=int(u.get("completion_tokens", 0) or 0),
+            latency_ms=int((time.monotonic() - started) * 1000),
+            status="ok",
+        )
+        return data
+
+    def _post_raw(self, body: dict) -> dict:
         last: Exception | None = None
         for _ in range(self.retries + 1):
             try:
@@ -349,14 +402,52 @@ def _cached_provider(kind: str, model: str | None = None, effort: str | None = N
     raise LLMConfigError("No LLM provider is configured (LLM_PROVIDER=none). You can still write answers yourself.")
 
 
-TASKS = ("answer", "transcribe", "verify")
+TASKS = ("answer", "answer_hard", "transcribe", "verify")
 
 
-def task_model(task: str) -> str:
-    """Model used for a task: answers use LLM_MODEL; light tasks may use a smaller model."""
+# The current Claude family offered for per-task choice (see LLM_MODEL_CHOICES).
+CHOICE_FAMILY = ("claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5", "claude-opus-4-8")
+
+
+def _env_task_model(task: str) -> str | None:
     s = get_settings()
-    routed = {"transcribe": s.llm_model_transcribe, "verify": s.llm_model_verify}.get(task)
-    return routed or s.llm_model
+    return {
+        "answer": s.llm_model_answer,
+        "answer_hard": s.llm_model_answer_hard,
+        "transcribe": s.llm_model_transcribe,
+        "verify": s.llm_model_verify,
+    }.get(task)
+
+
+def model_choices() -> list[str]:
+    """Models a user may choose per task: LLM_MODEL_CHOICES, or the Claude family in LLM_MODEL's id style."""
+    from app.ai.pricing import base_model
+
+    s = get_settings()
+    if s.llm_model_choices:
+        listed = [m.strip() for m in s.llm_model_choices.split(",") if m.strip()]
+    elif s.llm_provider in ("anthropic", "bedrock"):
+        main, base = s.llm_model, base_model(s.llm_model)
+        prefix = main[: len(main) - len(base)] if main.endswith(base) else ""
+        listed = [prefix + m for m in CHOICE_FAMILY]
+    else:
+        listed = []
+    configured = [s.llm_model] + [_env_task_model(t) for t in TASKS]
+    return list(dict.fromkeys(m for m in listed + configured if m))
+
+
+def default_task_model(task: str) -> str:
+    """Server default for a task (LLM_MODEL_<TASK>, else LLM_MODEL)."""
+    return _env_task_model(task) or get_settings().llm_model
+
+
+def task_model(task: str, routing: dict | None = None) -> str:
+    """Model used for a task: the user's choice (User.model_routing) while it is still offered, else the
+    server default."""
+    chosen = (routing or {}).get(task)
+    if chosen and chosen in model_choices():
+        return chosen
+    return default_task_model(task)
 
 
 class EscalatingProvider(LLMProvider):
@@ -376,7 +467,10 @@ class EscalatingProvider(LLMProvider):
         try:
             return fn(self.light, *args, **kwargs)
         except (LLMInvalidOutput, LLMRefusal) as exc:
-            log.info("escalating to main model", extra={"from": self.light.model, "reason": type(exc).__name__})
+            log.warning(
+                f"escalating from {self.light.model} to {self.main.model}",
+                extra={"from_model": self.light.model, "to_model": self.main.model, "reason": type(exc).__name__},
+            )
             return fn(self.main, *args, **kwargs)
 
     def complete_json(self, system, user, schema, *, max_tokens=16000, images=None, effort=None) -> LLMResult:
@@ -394,19 +488,19 @@ class EscalatingProvider(LLMProvider):
         return self._escalate(lambda p, *a: p.transcribe_image(*a), image, prompt, media_type)
 
 
-def get_provider(task: str = "answer") -> LLMProvider:
+def get_provider(task: str = "answer", routing: dict | None = None) -> LLMProvider:
     """Provider for a kind of work. ``answer`` uses LLM_MODEL at LLM_EFFORT; ``transcribe`` and ``verify``
-    use their routed models at LLM_EFFORT_LIGHT, escalating to LLM_MODEL on failure."""
+    use their routed models at LLM_EFFORT_LIGHT, escalating to LLM_MODEL on failure. ``routing`` is the
+    user's per-task model choice (User.model_routing)."""
     if _override is not None:
         return _override
     s = get_settings()
-    if task == "answer":
-        return _cached_provider(s.llm_provider, s.llm_model, s.llm_effort)
-    model = task_model(task)
-    light = _cached_provider(s.llm_provider, model, s.llm_effort_light)
+    model = task_model(task, routing)
+    effort = s.llm_effort if task in ("answer", "answer_hard") else s.llm_effort_light
+    light = _cached_provider(s.llm_provider, model, effort)
     if model == s.llm_model or not s.llm_escalate:
         return light
-    return EscalatingProvider(light, _cached_provider(s.llm_provider, s.llm_model, s.llm_effort_light))
+    return EscalatingProvider(light, _cached_provider(s.llm_provider, s.llm_model, effort))
 
 
 def provider_configured() -> bool:
@@ -441,12 +535,12 @@ def provider_configured() -> bool:
     return False
 
 
-def provider_status() -> dict:
+def provider_status(routing: dict | None = None) -> dict:
     s = get_settings()
     return {
         "provider": s.llm_provider,
         "model": s.llm_model,
         "configured": provider_configured(),
-        "routing": {t: task_model(t) for t in TASKS},
+        "routing": {t: task_model(t, routing) for t in TASKS},
         "adaptive_effort": s.llm_adaptive_effort,
     }

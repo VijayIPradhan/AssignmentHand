@@ -80,3 +80,24 @@ whose worker died are re-queued after `JOB_STALE_AFTER_S`. Failure hooks put the
 - Rate limits on generation, rendering, previews, login and registration (per process).
 - Deletion: profile, assignment and account deletion remove database rows and all stored files.
   Optional retention purge via `RETENTION_DAYS`.
+
+## Observability
+
+- **Logs** (`app/logging_setup.py`): every record carries the bound context - `request_id`, `user_id`, `job_id`,
+  `job_type`, `assignment_id`, `profile_id`, `task` - so one request or job can be followed end to end (context is
+  copied into worker threads). Console output is readable in development and JSON in production; rotating JSON
+  files `LOG_DIR/app.jsonl` and `LOG_DIR/errors.jsonl`. A redaction filter masks sensitive fields (passwords,
+  tokens, keys, document/answer/transcript text) even if passed by mistake.
+- **What is logged**: every HTTP request (method, path, status, duration, user, client; 4xx as warnings, 5xx as
+  errors, slow requests flagged), structured API errors, job lifecycle (queued, started with queue wait, each
+  step with the previous step's duration, retry with reason and time, failure with traceback, success with
+  duration and result), every AI call (task, model requested and served, tokens, latency, cost, outcome,
+  escalations), extraction per page and per flagged question, handwriting per sample (lines, letters aligned /
+  rejected / sliced) and profile summary, generation per answer (words, flags, fit retries), rendering
+  (pages, glyphs placed, warnings, layout and PDF time), and browser errors reported by the frontend
+  (`POST /client-log`: uncaught errors, unhandled rejections, 5xx and unreachable API).
+- **Job timeline**: `ProcessingJob.events` keeps the steps, retries and errors of each job; the UI shows it
+  under "Show steps".
+- **AI usage**: `llm_usage` records each provider call; `GET /usage` aggregates by task, model, day and
+  assignment with pricing in effect and the monthly budget (`LLM_MONTHLY_BUDGET_USD`, enforced before new AI
+  work). Letter-verification verdicts are cached per profile so re-processing only sends new letters.

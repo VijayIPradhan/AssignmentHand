@@ -38,13 +38,25 @@ function EstimateBox() {
       {!e.ai.configured ? (
         <p className="mt-1 text-muted">No AI provider is set up, so generating costs nothing here; you write the answers.</p>
       ) : e.pricing_known && e.cost_usd_min !== null ? (
-        <p className="mt-1">
-          Estimated cost with <span className="font-medium">{e.model}</span>:{" "}
-          <span className="font-medium">
-            {usd(e.cost_usd_min)} to {usd(e.cost_usd_max)}
-          </span>
-          . Reasoning tokens vary, hence the range.
-        </p>
+        <>
+          <p className="mt-1">
+            Estimated cost:{" "}
+            <span className="font-medium">
+              {usd(e.cost_usd_min)} to {usd(e.cost_usd_max)}
+            </span>
+            . Reasoning tokens vary, hence the range.
+          </p>
+          <ul className="mt-1.5 flex flex-col gap-0.5 text-[13px] text-muted">
+            {e.models.map((m) => (
+              <li key={m.model}>
+                <span className="font-medium text-graphite">{m.model}</span>: {m.questions}{" "}
+                {m.questions === 1 ? "question" : "questions"}
+                {m.hard > 0 ? " (harder: maths, figures, high marks or detailed)" : ""}, {usd(m.cost_usd_min)} to{" "}
+                {usd(m.cost_usd_max)}
+              </li>
+            ))}
+          </ul>
+        </>
       ) : (
         <p className="mt-1 text-muted">
           Pricing is unknown for the model {e.model ? <span className="font-medium text-graphite">{e.model}</span> : ""} with
@@ -141,7 +153,9 @@ export function StepPreferences() {
   const { a, replace, go } = useWorkspace();
   const [title, setTitle] = useState(a.title);
   const [subject, setSubject] = useState(a.subject ?? "");
-  const [prefs, setPrefs] = useState({ ...DEFAULTS, ...a.preferences });
+  // Effective preferences = your global ones (shared by all assignments) plus any old per-assignment overrides.
+  const [prefs, setPrefs] = useState({ ...DEFAULTS, ...(a.effective_preferences as Partial<typeof DEFAULTS>) });
+  const hasOverrides = Object.keys(a.preferences ?? {}).length > 0;
   const [state, setState] = useState<"idle" | "dirty" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -154,13 +168,12 @@ export function StepPreferences() {
     setState("saving");
     setError(null);
     try {
+      // Answer style is global (all assignments); title and subject belong to this assignment.
+      await api.saveGlobalPreferences({ ...prefs, target_words: prefs.target_words ? Number(prefs.target_words) : null });
       const next = await api.updateAssignment(a.id, {
         title: title.trim() || a.title,
         subject,
-        preferences: {
-          ...prefs,
-          target_words: prefs.target_words ? Number(prefs.target_words) : null,
-        },
+        clear_preference_overrides: true,
       });
       replace(next);
       setState("saved");
@@ -173,10 +186,10 @@ export function StepPreferences() {
   return (
     <div className="flex flex-col gap-6">
       <p className="max-w-3xl text-sm text-muted">
-        How answers should be written. These guide AI drafts; if you write the answers yourself they are only a
-        reference.
+        How answers should be written. The answer style is saved for all your assignments, so you set it once;
+        the title and subject belong to this assignment.
       </p>
-      <Sheet title="Answer style">
+      <Sheet title="Answer style" description="Applies to all your assignments.">
         <form
           className="flex flex-col gap-5"
           onSubmit={(e) => {
@@ -184,9 +197,17 @@ export function StepPreferences() {
             void save();
           }}
         >
-          <div className="grid gap-4 sm:grid-cols-2">
+          <fieldset className="grid gap-4 rounded-[5px] border border-line p-4 sm:grid-cols-2">
+            <legend className="px-1 text-[13px] font-medium text-muted">This assignment only</legend>
             <TextField label="Title" value={title} maxLength={255} onChange={(e) => { setTitle(e.target.value); setState("dirty"); }} />
             <TextField label="Subject" value={subject} maxLength={120} placeholder="e.g. Organic chemistry" onChange={(e) => { setSubject(e.target.value); setState("dirty"); }} />
+          </fieldset>
+          {hasOverrides && (
+            <Notice tone="ink">
+              This assignment had its own answer style. Saving applies your shared style to it instead.
+            </Notice>
+          )}
+          <div className="grid gap-4 sm:grid-cols-2">
             <TextField
               label="Academic level"
               value={prefs.academic_level}

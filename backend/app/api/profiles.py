@@ -201,15 +201,20 @@ def transcribe_sample(pid: str, sid: str, user: User = Depends(current_user), db
     if not provider_configured():
         raise ConfigurationError("No AI provider is configured; type the transcript instead")
     check_rate(user.id, "transcribe", get_settings().rate_limit_generate_per_min)
+    from app.ai.budget import enforce_budget
+    from app.ai.usage import usage_scope
+
+    enforce_budget(db, user.id)
     img = apply_corrections(load_image(get_storage().get(s.storage_key), s.mime_type), s.corrections)
     f = min(1.0, 2000 / max(img.shape[:2]))
     if f < 1:
         img = cv2.resize(img, None, fx=f, fy=f, interpolation=cv2.INTER_AREA)
     _ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 88])
     try:
-        s.transcript = get_provider("transcribe").transcribe_image(
-            buf.tobytes(), HANDWRITING_TRANSCRIBE_PROMPT, "image/jpeg"
-        )
+        with usage_scope(user.id, "transcribe", profile_id=p.id):
+            s.transcript = get_provider("transcribe", user.model_routing).transcribe_image(
+                buf.tobytes(), HANDWRITING_TRANSCRIBE_PROMPT, "image/jpeg"
+            )
     except LLMError as exc:
         raise AppError(f"Transcription failed: {exc}", code="ai_error", status_code=502) from exc
     db.commit()

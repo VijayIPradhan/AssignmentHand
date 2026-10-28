@@ -1,7 +1,7 @@
 import pytest
 
 from app.ai.generate import QuestionSpec, generate_answer
-from app.ai.pricing import cost
+from app.ai.pricing import cost, price_for
 from app.ai.prompts import AnswerPreferences, build_user_prompt, target_words
 from app.ai.providers import LLMConfigError, LLMInvalidOutput, LLMTransientError, get_provider, set_provider_override
 from app.ai.retrieval import chunk, top_chunks
@@ -108,7 +108,8 @@ def test_retrieval_ranks_relevant_chunks():
 
 def test_cost_estimates():
     assert cost("claude-opus-5-5", 1_000_000, 1_000_000) == 24.0
-    assert cost("global.anthropic.claude-opus-5-5", 10, 10) is None  # Bedrock pricing differs; not guessed
+    # Bedrock ids are priced at Anthropic list price and labelled as an estimate (see test_usage)
+    assert price_for("global.anthropic.claude-opus-5-5").source == "list_price_estimate"
 
 
 def test_unconfigured_provider_raises_config_error(tmp_env):
@@ -160,9 +161,12 @@ def test_per_question_failure_does_not_lose_other_answers(auth_client, fake_llm)
     c.put(f"/api/v1/questions/{qs[0]['id']}/answer", json={"content": "My approved answer."})
     ans_id = c.get(f"/api/v1/assignments/{aid}/questions").json()[0]["answer"]["id"]
     c.post(f"/api/v1/answers/{ans_id}/approve")
-    fake_llm.responses = [LLMInvalidOutput("x"), LLMInvalidOutput("x")] + [
-        {"answer": f"A{i}", "flags": [], "confidence": "high"} for i in range(10)
-    ]
+    # Question 6 always returns unusable output (both attempts); every other question succeeds.
+    fake_llm.responder = lambda user: (
+        LLMInvalidOutput("x")
+        if "Question number: 6" in user
+        else {"answer": "Fine.", "flags": [], "confidence": "high"}
+    )
     c.post(f"/api/v1/assignments/{aid}/generate", json={})
     run_jobs()
     after = c.get(f"/api/v1/assignments/{aid}/questions").json()
@@ -170,7 +174,7 @@ def test_per_question_failure_does_not_lose_other_answers(auth_client, fake_llm)
     statuses = sorted(q["answer"]["status"] for q in after[1:])
     assert statuses.count("failed") == 1 and statuses.count("generated") == 4
     failed = next(q for q in after if q["answer"]["status"] == "failed")
-    assert "format" in failed["answer"]["error"] or "x" in failed["answer"]["error"]
+    assert failed["number"] == "6" and failed["answer"]["error"] == "x"
 
 
 def test_edit_approve_conflict_history_and_restore(auth_client, fake_llm):
@@ -211,3 +215,50 @@ def test_estimate_endpoint(auth_client):
     aid, _ = _ready_assignment(auth_client)
     est = auth_client.get(f"/api/v1/assignments/{aid}/estimate").json()
     assert est["questions"] == 6 and est["input_tokens"] > 0 and est["output_tokens_max"] >= est["output_tokens_min"]
+
+
+def test_estimate_routes_questions_like_generation(auth_client, monkeypatch):
+    """The estimate prices each question on the model generation will use, not the main model."""
+    from app import config
+
+    monkeypatch.setenv("LLM_MODEL", "global.anthropic.claude-opus-5-5")
+    monkeypatch.setenv("LLM_MODEL_ANSWER", "global.anthropic.claude-haiku-5-5")
+    monkeypatch.setenv("LLM_MODEL_ANSWER_HARD", "")
+    config.get_settings.cache_clear()
+    try:
+        aid, _ = _ready_assignment(auth_client)
+        est = auth_client.get(f"/api/v1/assignments/{aid}/estimate").json()
+    finally:
+        config.get_settings.cache_clear()
+    by_model = {m["model"]: m for m in est["models"]}
+    haiku, opus = by_model["global.anthropic.claude-haiku-5-5"], by_model["global.anthropic.claude-opus-5-5"]
+    assert haiku["hard"] == 0 and opus["hard"] == opus["questions"] >= 1  # the sample has a calculation question
+    assert haiku["questions"] + opus["questions"] == est["questions"]
+    assert est["cost_usd_min"] == pytest.approx(haiku["cost_usd_min"] + opus["cost_usd_min"], abs=1e-3)
+
+
+def test_answer_preferences_are_global_and_subject_stays_per_assignment(auth_client, fake_llm):
+    c = auth_client
+    a1, _ = _ready_assignment(c)
+    a2, _ = _ready_assignment(c)
+    c.patch(f"/api/v1/assignments/{a1}", json={"subject": "Physics"})
+    c.patch(f"/api/v1/assignments/{a2}", json={"subject": "History"})
+    r = c.put(
+        "/api/v1/auth/preferences", json={"academic_level": "postgraduate", "detail": "concise", "tone": "neutral"}
+    )
+    assert r.json()["academic_level"] == "postgraduate" and r.json()["language"] == "English"
+    for aid, subject in ((a1, "Physics"), (a2, "History")):
+        d = c.get(f"/api/v1/assignments/{aid}").json()
+        assert d["effective_preferences"]["academic_level"] == "postgraduate" and d["subject"] == subject
+    # an assignment can override one setting, and go back to the global set
+    c.patch(f"/api/v1/assignments/{a2}", json={"preferences": {"detail": "detailed"}})
+    d2 = c.get(f"/api/v1/assignments/{a2}").json()["effective_preferences"]
+    assert d2["detail"] == "detailed" and d2["academic_level"] == "postgraduate"
+    c.patch(f"/api/v1/assignments/{a2}", json={"clear_preference_overrides": True})
+    assert c.get(f"/api/v1/assignments/{a2}").json()["effective_preferences"]["detail"] == "concise"
+    # generation uses the merged preferences
+    c.post(f"/api/v1/assignments/{a1}/generate", json={})
+    run_jobs()
+    assert (
+        "Academic level: postgraduate" in fake_llm.calls[0]["user"] and "Subject: Physics" in fake_llm.calls[0]["user"]
+    )

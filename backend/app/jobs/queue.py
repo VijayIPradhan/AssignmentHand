@@ -38,6 +38,7 @@ def enqueue(
             )
         )
         if existing is not None and existing.payload == (payload or {}):
+            log.info(f"job already queued: {type}", extra={"job_id": existing.id, "job_type": type})
             return existing
     job = ProcessingJob(
         user_id=user_id,
@@ -49,6 +50,10 @@ def enqueue(
     )
     db.add(job)
     db.commit()
+    log.info(
+        f"job queued: {type}",
+        extra={"job_id": job.id, "job_type": type, "assignment_id": assignment_id, "profile_id": profile_id},
+    )
     return job
 
 
@@ -85,6 +90,10 @@ def requeue_stale(db: Session) -> int:
         select(ProcessingJob).where(ProcessingJob.status == JobStatus.running, ProcessingJob.locked_at < cutoff)
     ).all()
     for job in stale:
+        log.warning(
+            "stale job recovered",
+            extra={"job_id": job.id, "job_type": job.type, "locked_by": job.locked_by, "attempt": job.attempts},
+        )
         if job.attempts >= job.max_attempts:
             job.status = JobStatus.failed
             job.error = "The job stopped responding and ran out of retries"

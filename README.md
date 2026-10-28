@@ -33,7 +33,9 @@ cp ../.env.example .env                                  # then edit: see "Confi
 # Frontend (second terminal)
 cd frontend
 npm install
-npm run dev            # http://localhost:3000 (proxies /api to BACKEND_URL, default http://localhost:8000)
+npm run dev            # http://localhost:3000 (proxies /api to BACKEND_URL, default http://127.0.0.1:8000)
+# From a phone on the same Wi-Fi: ALLOWED_DEV_ORIGINS=<your PC's Wi-Fi IP> npm run dev -- -H 0.0.0.0
+# then open http://<your PC's Wi-Fi IP>:3000 on the phone
 ```
 
 API docs (OpenAPI/Swagger): http://localhost:8000/api/docs - also exported to `docs/openapi.json`.
@@ -64,6 +66,8 @@ All settings are environment variables (see [.env.example](.env.example)). The i
 | `LLM_ADAPTIVE_EFFORT` | Medium thinking effort for small questions (<= 3 marks or concise), `LLM_EFFORT` for the rest. |
 | `AWS_REGION`, `AWS_BEARER_TOKEN_BEDROCK` | Bedrock region and API key (or standard AWS credentials). |
 | `ANTHROPIC_API_KEY` | Anthropic API key when `LLM_PROVIDER=anthropic`. |
+| `LLM_PRICING`, `LLM_MONTHLY_BUDGET_USD` | Your real per-model prices (else list-price estimates) and an optional monthly AI budget per user. Usage page: *AI usage*. |
+| `LOG_LEVEL`, `LOG_FORMAT`, `LOG_DIR` | Logging: readable console in development, JSON in production; rotating `app.jsonl` / `errors.jsonl` files. |
 | `OCR_PROVIDER` | `auto` (Tesseract if installed, else the AI model), `tesseract`, `llm`, `none`. |
 | `FALLBACK_FONT_PATH` | Font for characters missing from a profile (a handwriting-style font is picked automatically when available). |
 | `MAX_UPLOAD_MB`, `MAX_PDF_PAGES`, `RATE_LIMIT_*` | Upload limits and per-user rate limits. |
@@ -88,7 +92,7 @@ type answers yourself and the UI explains how to enable AI.
 
 ```bash
 cd backend
-.venv/Scripts/python -m pytest -q          # 93 tests: handwriting, ingestion, AI, rendering, security, e2e
+.venv/Scripts/python -m pytest -q          # 105 tests: handwriting, ingestion, AI, rendering, security, e2e
 .venv/Scripts/ruff check app tests && .venv/Scripts/ruff format --check app tests
 DATABASE_URL=sqlite:///./data/check.db .venv/Scripts/alembic upgrade head && .venv/Scripts/alembic check
 cd ../frontend && npm run lint && npm run typecheck && npm run build

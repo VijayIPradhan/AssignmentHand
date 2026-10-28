@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Newsreader, Public_Sans } from "next/font/google";
+import { ErrorReporter } from "@/components/ErrorReporter";
 import "./globals.css";
 
 const newsreader = Newsreader({
@@ -29,7 +30,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${newsreader.variable} ${publicSans.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col bg-paper text-graphite">{children}</body>
+      <body className="min-h-full flex flex-col bg-paper text-graphite">
+        <ErrorReporter />
+        {children}
+      </body>
     </html>
   );
 }

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import get_db
 from app.errors import Unauthorized
+from app.logging_setup import bind_into
 from app.models import User
 
 COOKIE_NAME = "ah_session"
@@ -65,4 +66,6 @@ def current_user(request: Request, db: Session = Depends(get_db)) -> User:
     user = db.get(User, decode_token(token))
     if user is None:
         raise Unauthorized("Account no longer exists")
+    request.state.user_id = user.id
+    bind_into(user_id=user.id)
     return user

@@ -43,8 +43,21 @@ class RenderSettings(BaseModel):
     min_fit_scale: float = Field(0.7, ge=0.4, le=1.0)
     answer_prefix: str = Field("", max_length=20)
     extra_page_paper: Literal["ruled", "blank", "grid"] = "ruled"
+    # Printed form fields on the source pages ("Registration Number: ____"): label -> value written in
+    # handwriting. Keys are normalised labels as returned by GET /assignments/{id}/fields.
+    field_values: dict[str, str] = Field(default_factory=dict, max_length=30)
+    # Place the user's own uploaded signature on signature lines. None = automatic: sign when the user
+    # has uploaded a signature (resolved in services.assignments.effective_settings).
+    sign_fields: bool | None = None
+    signature_color: str = "#1f3a93"
+    signature_height_mm: float = Field(11.0, ge=4, le=30)
 
-    @field_validator("paper_color", "rule_color", "ink_color")
+    @field_validator("field_values")
+    @classmethod
+    def _values(cls, v: dict[str, str]) -> dict[str, str]:
+        return {k.strip().lower()[:80]: str(val)[:80] for k, val in v.items() if k.strip()}
+
+    @field_validator("paper_color", "rule_color", "ink_color", "signature_color")
     @classmethod
     def _hex(cls, v: str) -> str:
         v = v.strip()

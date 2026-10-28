@@ -16,12 +16,17 @@ os.environ.update(
         "RUN_WORKER_IN_PROCESS": "false",
         "SECRET_KEY": "test-secret-key-0123456789-abcdefghijkl",
         "RETENTION_DAYS": "0",
+        "LOG_DIR": "",  # tests never write to the developer's log files
+        "LOG_FORMAT": "json",
+        "LLM_MIN_LENGTH_RATIO": "0",  # scripted fake answers are short; the rule has its own test
     }
 )
 
 
 class FakeProvider:
-    """Deterministic stand-in for an LLM. Behaviour is scripted per test via ``responses``."""
+    """Deterministic stand-in for an LLM, safe under concurrent use (generation runs questions in
+    parallel). Script it with ``responses`` (consumed in order) or, when the order across threads
+    matters, ``responder(user_prompt) -> dict | Exception`` keyed on the question."""
 
     name = "fake"
     model = "fake-model"
@@ -29,18 +34,24 @@ class FakeProvider:
     max_output_tokens = 16000
 
     def __init__(self):
+        import threading
+
         self.responses: list = []
+        self.responder = None
         self.calls: list[dict] = []
+        self._lock = threading.Lock()
 
     def complete_json(self, system, user, schema, *, max_tokens=16000, images=None, effort=None):
         from app.ai.providers import LLMResult
 
-        self.calls.append({"system": system, "user": user, "effort": effort})
-        r = (
-            self.responses.pop(0)
-            if self.responses
-            else {"answer": "Default answer text for testing.", "flags": [], "confidence": "high"}
-        )
+        with self._lock:
+            self.calls.append({"system": system, "user": user, "effort": effort})
+            if self.responder is not None:
+                r = self.responder(user)
+            elif self.responses:
+                r = self.responses.pop(0)
+            else:
+                r = {"answer": "Default answer text for testing.", "flags": [], "confidence": "high"}
         if isinstance(r, Exception):
             raise r
         return LLMResult(r, "", self.model, 100, 50)

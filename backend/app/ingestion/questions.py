@@ -49,7 +49,10 @@ class QuestionDraft:
     figure_indexes: list[int] = field(default_factory=list)
     y_range: list[tuple[int, float, float]] = field(default_factory=list)  # (page, y0, y1)
     x0: float = 0.0  # left edge of the question text, points
-    answer_space: dict | None = None  # {"page", "top", "bottom", "x0", "fraction"} in points
+    answer_space: dict | None = None  # {"page", "top", "bottom", "x0", "fraction", "blocked"} in points
+    # Printed marks-only lines ("[10 Marks]") of this question: (page, y0, y1, x0) in points
+    marks_lines: list[tuple[int, float, float, float]] = field(default_factory=list)
+    text_end: list[tuple[int, float]] = field(default_factory=list)  # (page, bottom of the last text line)
 
     @property
     def needs_review(self) -> bool:
@@ -84,7 +87,14 @@ def strip_headers_footers(lines: list[LineInfo], pages: list[PageInfo]) -> tuple
     need = max(2, (n_pages + 1) // 2)
 
     def is_question(ln: LineInfo) -> bool:
-        return ln.kind == "text" and bool(Q_RE.match(ln.text) or NUM_RE.match(ln.text))
+        """Question starts and marks-only lines ("[10 Marks]") belong to the question, even when the
+        same text repeats on every page."""
+        if ln.kind != "text":
+            return False
+        if Q_RE.match(ln.text) or NUM_RE.match(ln.text):
+            return True
+        rest, marks = extract_marks(ln.text)
+        return marks is not None and not rest.strip()
 
     pages_with: dict[str, set[int]] = {}
     first_q_y: dict[int, float] = {}
@@ -245,9 +255,21 @@ def _ranges(lines: list[LineInfo]) -> list[tuple[int, float, float]]:
     return [(p, a, b) for p, (a, b) in sorted(by_page.items())]
 
 
+def _is_marks_only(ln: LineInfo) -> bool:
+    if ln.kind != "text":
+        return False
+    rest, marks = extract_marks(ln.text)
+    return marks is not None and not rest.strip()
+
+
 def _finish(d: QuestionDraft, lines: list[LineInfo]) -> QuestionDraft:
     d.pages = sorted({ln.page for ln in lines})
     d.y_range = _ranges(lines)
+    d.marks_lines = [(ln.page, ln.y0, ln.y1, ln.x0) for ln in lines if _is_marks_only(ln)]
+    text_lines = [ln for ln in lines if not _is_marks_only(ln)]
+    if text_lines:
+        last = max(ln.page for ln in text_lines)
+        d.text_end = [(last, max(ln.y1 for ln in text_lines if ln.page == last))]
     if lines:
         d.x0 = min(ln.x0 for ln in lines)
     if lines:
@@ -342,8 +364,10 @@ def segment(lines: list[LineInfo], pages: list[PageInfo], figures: list[FigureIn
 def _answer_regions(drafts: list[QuestionDraft], pages: list[PageInfo], footers: list[LineInfo]) -> None:
     """Record the blank space after each question on its last page (for writing on the source PDF).
 
-    The space runs from the end of the question to the next question on the same page, else to the
-    page footer (or bottom margin)."""
+    The space runs from the end of the question text to the next question on the same page, else to
+    the page footer (or bottom margin). A printed marks label ("[10 Marks]") below the question does
+    not push the answer down: the answer starts right under the question and only the label's own
+    line is skipped (``blocked``)."""
     heights = {p.index: p.height for p in pages}
     footer_top: dict[int, float] = {}
     for f in footers:
@@ -356,9 +380,18 @@ def _answer_regions(drafts: list[QuestionDraft], pages: list[PageInfo], footers:
         h = heights[page]
         nxt = [y for p, y in starts if p == page and y > y1 + 1]
         bottom = min(nxt) - 6 if nxt else footer_top.get(page, h * 0.95) - 6
+        top = y1 + 4
+        blocked = []
+        if d.text_end and d.text_end[-1][0] == page:
+            text_y = d.text_end[-1][1]
+            marks_here = [m for m in d.marks_lines if m[0] == page and m[1] >= text_y - 1]
+            if marks_here:
+                top = text_y + 4
+                blocked = [[m[1] - 1.5, m[2] + 1.5, m[3]] for m in marks_here]
         d.answer_space = {
             "page": page,
-            "top": y1 + 4,
+            "top": top,
+            "blocked": blocked,
             "bottom": bottom,
             "x0": d.x0,
             "fraction": max(0.0, (bottom - y1) / h),

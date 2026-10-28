@@ -105,7 +105,7 @@ class LlmOcr(OcrProvider):
         return OcrResult(lines, self.name)
 
 
-def get_ocr() -> OcrProvider | None:
+def get_ocr(routing: dict | None = None) -> OcrProvider | None:
     s = get_settings()
     mode = s.ocr_provider
     if mode in ("auto", "tesseract") and TesseractOcr.available(s.tesseract_cmd):
@@ -114,7 +114,7 @@ def get_ocr() -> OcrProvider | None:
         from app.ai.providers import get_provider, provider_configured
 
         if provider_configured():
-            return LlmOcr(get_provider("transcribe"))
+            return LlmOcr(get_provider("transcribe", routing))
     if mode == "tesseract":
         log.warning("OCR_PROVIDER=tesseract but the tesseract binary was not found")
     return None

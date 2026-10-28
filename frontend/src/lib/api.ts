@@ -7,6 +7,10 @@
  */
 import type {
   Answer,
+  AnswerPreferences,
+  ModelRouting,
+  AssignmentFields,
+  SignatureInfo,
   Assignment,
   AssignmentSummary,
   AssignmentUpdate,
@@ -23,8 +27,11 @@ import type {
   RenderSettings,
   Sample,
   StyleIn,
+  Usage,
   User,
 } from "./types";
+
+import { reportClientError } from "./telemetry";
 
 export const API = "/api/v1";
 
@@ -106,16 +113,21 @@ export async function raw(path: string, opts: RequestOptions = {}): Promise<Resp
   } else if (opts.form) {
     body = opts.form;
   }
-  const res = await fetch(`${API}${path}`, {
-    method: opts.method ?? (body ? "POST" : "GET"),
-    credentials: "include",
-    headers,
-    body,
-    signal: opts.signal,
-    cache: "no-store",
-  });
+  const method = opts.method ?? (body ? "POST" : "GET");
+  let res: Response;
+  try {
+    res = await fetch(`${API}${path}`, { method, credentials: "include", headers, body, signal: opts.signal, cache: "no-store" });
+  } catch (e) {
+    if (!(e instanceof DOMException && e.name === "AbortError")) {
+      reportClientError("warning", `API unreachable: ${method} ${path.split("?")[0]}`, { source: "api" });
+    }
+    throw e;
+  }
   if (!res.ok) {
     const err = await toError(res);
+    if (res.status >= 500) {
+      reportClientError("error", `API ${res.status} ${err.code}: ${method} ${path.split("?")[0]}`, { source: "api" });
+    }
     if (res.status === 401 && !NO_AUTH_REDIRECT.some((p) => path.startsWith(p))) redirectToLogin();
     throw err;
   }
@@ -153,6 +165,8 @@ export const urls = {
   docPdf: (aid: string, did: string) => `${API}/assignments/${aid}/documents/${did}/source.pdf`,
   figure: (aid: string, key: string) => `${API}/assignments/${aid}/figures?key=${enc(key)}`,
   renderedPage: (rid: string, n: number) => `${API}/rendered/${rid}/pages/${n}.png`,
+  signaturePreview: (color: string, v?: string) =>
+    `${API}/signature/preview.png?color=${enc(color)}${v ? `&v=${enc(v)}` : ""}`,
   download: (rid: string, inline = false) => `${API}/rendered/${rid}/download${inline ? "?inline=true" : ""}`,
 };
 
@@ -162,6 +176,7 @@ export const api = {
   // system
   publicConfig: () => request<PublicConfig>("/config/public"),
   dashboard: () => request<Dashboard>("/dashboard"),
+  usage: (days = 30) => request<Usage>(`/usage?days=${days}&recent=100`),
   job: (jid: string, signal?: AbortSignal) => request<Job>(`/jobs/${jid}`, { signal }),
   jobs: (q: { assignment_id?: string; profile_id?: string; active?: boolean; limit?: number }) => {
     const p = new URLSearchParams();
@@ -178,6 +193,20 @@ export const api = {
   logout: () => request<void>("/auth/logout", { method: "POST" }),
   me: () => request<User>("/auth/me"),
   deleteAccount: () => request<void>("/auth/me", { method: "DELETE" }),
+  /** Answer preferences shared by all assignments (the subject stays per assignment). */
+  modelRouting: () => request<ModelRouting>("/auth/model-routing"),
+  saveModelRouting: (routing: Record<string, string | null>) =>
+    request<ModelRouting>("/auth/model-routing", { method: "PUT", json: { routing } }),
+  globalPreferences: () => request<AnswerPreferences>("/auth/preferences"),
+  saveGlobalPreferences: (body: Partial<AnswerPreferences>) =>
+    request<AnswerPreferences>("/auth/preferences", { method: "PUT", json: body }),
+
+  // signature (the user's own, placed only when enabled for an assignment)
+  signature: () => request<SignatureInfo>("/signature"),
+  uploadSignature: (file: File, rotate = 0) =>
+    request<SignatureInfo>("/signature", { form: form({ file, rotate }) }),
+  deleteSignature: () => request<void>("/signature", { method: "DELETE" }),
+  assignmentFields: (aid: string) => request<AssignmentFields>(`/assignments/${aid}/fields`),
 
   // profiles
   profiles: () => request<Profile[]>("/profiles"),

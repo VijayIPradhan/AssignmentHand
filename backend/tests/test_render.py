@@ -167,3 +167,16 @@ def test_question_text_tables_render_as_tables_not_pipes(template_library):
     items = res.pages[0].items
     assert not any(isinstance(i, GlyphItem) and i.glyph.char == "|" for i in items)
     assert sum(isinstance(i, LineItem) for i in items) >= 4  # hand-drawn table rules
+
+
+def test_answers_skip_printed_marks_labels(template_library):
+    s = RenderSettings(paper="source", fit_to_space=False)
+    eng = GlyphCompositingEngine(template_library, EngineStyle(x_height_mm=s.handwriting_size_mm))
+    band = (40.0, 46.0)  # where "[10 Marks]" is printed
+    space = AnswerSpace(page=0, top=20.0, bottom=150.0, left=20.0, blocked=[band])
+    res = Layouter(eng, s).run_on_source([SectionInput("a", "1", "Q", LONG, space=space)], [(210.0, 297.0)])
+    for g in _glyphs(res.pages[0]):
+        top = g.y - g.glyph.top_mm * g.scale
+        bottom = g.y - g.glyph.bottom_mm * g.scale
+        assert not (top < band[1] and bottom > band[0]), "handwriting overlaps the printed marks label"
+    assert min(g.y for g in _glyphs(res.pages[0])) < band[0]  # writing starts above the label

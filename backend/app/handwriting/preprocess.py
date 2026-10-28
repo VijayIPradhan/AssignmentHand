@@ -124,13 +124,23 @@ def normalize_illumination(gray: np.ndarray) -> np.ndarray:
     return np.clip(norm, 0, 255).astype(np.uint8)
 
 
-def binarize(gray_norm: np.ndarray) -> np.ndarray:
+def binarize(gray_norm: np.ndarray, hysteresis: float = 0.0) -> np.ndarray:
     """Return an ink mask (uint8 0/255, ink=255). Expects an illumination-normalized image."""
     blur = cv2.GaussianBlur(gray_norm, (3, 3), 0)
     otsu, _ = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     # On a nearly blank page Otsu can pick a threshold inside the paper noise; clamp it.
     thr = min(otsu, 200)
-    mask = (blur < thr).astype(np.uint8) * 255
+    strong = blur < thr
+    # Hysteresis: faint pixels (light pen pressure, slight blur) count as ink only when they connect
+    # to clearly dark ink, so faded stems are kept without picking up paper texture.
+    paper = float(np.median(blur))
+    weak_thr = thr + (paper - thr) * hysteresis
+    weak = (blur < weak_thr).astype(np.uint8)
+    n, labels = cv2.connectedComponents(weak, connectivity=8)
+    has_strong = np.zeros(n, dtype=bool)
+    has_strong[np.unique(labels[strong])] = True
+    has_strong[0] = False
+    mask = (has_strong[labels] * 255).astype(np.uint8)
     return remove_specks(mask, min_area=max(4, gray_norm.size // 2_000_000))
 
 
@@ -217,6 +227,8 @@ def remove_ruling(img: np.ndarray, mask: np.ndarray) -> tuple[np.ndarray, dict]:
     h, w = mask.shape
     mask = mask.copy()
     rules = _rule_rows(mask)
+    if len(rules) < 3:
+        rules = []  # ruled paper has many evenly spaced rules; one or two "rules" are aligned letter bars
     info: dict = {"rules_removed": bool(rules), "rules": len(rules), "fits": rules}
     band = np.zeros(mask.shape, dtype=bool)
     xs = np.arange(w)
@@ -243,7 +255,8 @@ def remove_ruling(img: np.ndarray, mask: np.ndarray) -> tuple[np.ndarray, dict]:
                 col[top : bot + 1] = 0
         for dy in range(-(thick // 2 + 3), thick // 2 + 4):
             band[np.clip(yc + dy, 0, h - 1), xs] = True
-    vert = cv2.morphologyEx(mask, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (1, max(40, h // 12))))
+    # Margin lines run most of the page height; a tall letter stroke in a close-up photo does not.
+    vert = cv2.morphologyEx(mask, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (1, max(40, h // 3))))
     if vert.any():
         mask[vert > 0] = 0
         info["vertical_lines_removed"] = True
@@ -260,6 +273,8 @@ def remove_ruling(img: np.ndarray, mask: np.ndarray) -> tuple[np.ndarray, dict]:
             x + cw <= edge
             or x >= w - edge
             or (cw >= min_rule_len and cw > 10 * ch and (band[y : y + ch, x : x + cw].mean() > 0.3 or ch <= thin))
+            # page edges, folds and table borders: very long and thin, never handwriting
+            or (cw >= 0.35 * w and ch <= 0.03 * h)
         ):
             drop_ids.append(i)
     if drop_ids:

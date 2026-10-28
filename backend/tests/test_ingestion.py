@@ -222,3 +222,36 @@ def test_question_editor_operations(auth_client):
     doc = a["documents"][0]
     assert c.get(f"/api/v1/assignments/{aid}/documents/{doc['id']}/pages/1.png").content[:4] == b"\x89PNG"
     assert a["render_settings"]["paper"] in ("ruled", "source")
+
+
+def test_marks_on_their_own_line_belong_to_the_question_not_the_page_footer():
+    # Answer sheets often print "[10 Marks]" on its own line under each question, on every page.
+    header = ["Assignment No. 1", "Instructions:", "a. Attempt all questions."]
+    pages = []
+    for n in (1, 2):
+        pages.append([*header, "", f"Q{n} What is question {n} about?", "", "[10 Marks]"])
+    _, seg = _seg(_pdf(pages))
+    assert [(q.number, q.marks) for q in seg.questions] == [("1", 10.0), ("2", 10.0)]
+    for q in seg.questions:
+        sp = q.answer_space
+        assert sp["fraction"] > 0.6  # the whole page below the question block, not one line
+        marks_y0 = q.marks_lines[0][1]
+        assert sp["top"] < marks_y0  # starts right under the question text, beside the marks label
+        assert len(sp["blocked"]) == 1 and sp["blocked"][0][0] < marks_y0 < sp["blocked"][0][1]
+
+
+def test_reextraction_keeps_answers_and_refreshes_layout(auth_client):
+    c = auth_client
+    aid = c.post("/api/v1/assignments", files={"file": ("p.pdf", assignment_pdf())}).json()["id"]
+    run_jobs()
+    qs = c.get(f"/api/v1/assignments/{aid}/questions").json()
+    q1 = qs[0]
+    c.patch(f"/api/v1/questions/{q1['id']}", json={"text": "My corrected wording"})
+    ans = c.put(f"/api/v1/questions/{q1['id']}/answer", json={"content": "My answer."}).json()
+    c.post(f"/api/v1/answers/{ans['id']}/approve")
+    assert c.post(f"/api/v1/assignments/{aid}/extract").status_code == 202  # no longer refused
+    run_jobs()
+    after = c.get(f"/api/v1/assignments/{aid}/questions").json()
+    same = next(q for q in after if q["id"] == q1["id"])
+    assert same["text"] == "My corrected wording" and same["answer"]["status"] == "approved"
+    assert [q["number"] for q in after] == [q["number"] for q in qs]

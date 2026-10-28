@@ -219,3 +219,28 @@ def test_sample_crop_can_be_cleared(auth_client):
     assert (
         "crop" not in c.patch(f"/api/v1/profiles/{pid}/samples/{sid}", json={"clear_crop": True}).json()["corrections"]
     )
+
+
+def test_letter_verification_is_cached_per_profile(tmp_env):
+    import numpy as np
+
+    from app.handwriting.glyphs import Glyph
+    from app.models import HandwritingProfile
+    from app.services.profiles import cached_verify
+
+    p = HandwritingProfile(id="p1", user_id="u1", name="x")
+    g = lambda ch, v: Glyph(ch, np.full((10, 8), v, np.uint8), 10.0, 10.0, "freeform")  # noqa: E731
+    calls = []
+
+    def verify(todo):
+        calls.append(sum(len(v) for v in todo.values()))
+        return {ch: [x for x in gs if x.bitmap[0, 0] == 255] for ch, gs in todo.items()}  # keep "good" ones
+
+    first = cached_verify(p, {"a": [g("a", 255), g("a", 128)]}, verify, lambda *_: None)
+    assert [x.bitmap[0, 0] for x in first["a"]] == [255] and calls == [2]
+    # Same crops plus one new one: only the new crop is sent
+    again = cached_verify(p, {"a": [g("a", 255), g("a", 128), g("a", 254)]}, verify, lambda *_: None)
+    assert calls == [2, 1] and [x.bitmap[0, 0] for x in again["a"]] == [255]
+    # Everything cached: no model call at all
+    cached_verify(p, {"a": [g("a", 255)]}, verify, lambda *_: None)
+    assert calls == [2, 1]
