@@ -158,3 +158,24 @@ def test_model_routing_api(auth_client):
     assert c.put("/api/v1/auth/model-routing", json={"routing": {"cooking": pick}}).status_code == 422
     out = c.put("/api/v1/auth/model-routing", json={"routing": {"answer": None}}).json()
     assert not next(t for t in out["tasks"] if t["task"] == "answer")["custom"]
+
+
+def test_bedrock_api_key_read_from_dotenv(tmp_env, monkeypatch):
+    from app import config
+
+    (tmp_env / ".env").write_text("AWS_BEARER_TOKEN_BEDROCK=key-from-dotenv\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_env)
+    monkeypatch.delenv("AWS_BEARER_TOKEN_BEDROCK", raising=False)
+    for name in ("AWS_ACCESS_KEY_ID", "AWS_PROFILE"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("LLM_PROVIDER", "bedrock")
+    monkeypatch.setenv("AWS_REGION", "ap-south-1")
+    monkeypatch.setattr(providers.Path, "home", lambda: tmp_env)  # no ~/.aws/credentials
+    config.get_settings.cache_clear()
+    assert providers.provider_configured()
+    client = providers.BedrockProvider("some-model")._make_client(config.get_settings())
+    assert client.api_key == "key-from-dotenv"
+
+    monkeypatch.setenv("AWS_BEARER_TOKEN_BEDROCK", "key-from-env")  # the environment wins
+    config.get_settings.cache_clear()
+    assert providers.BedrockProvider("some-model")._make_client(config.get_settings()).api_key == "key-from-env"

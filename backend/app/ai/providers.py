@@ -238,7 +238,7 @@ class AnthropicProvider(LLMProvider):
 class BedrockProvider(AnthropicProvider):
     """Claude on Amazon Bedrock via bedrock-runtime, using the Anthropic SDK's Bedrock client.
 
-    Auth is resolved by the SDK: a Bedrock API key in AWS_BEARER_TOKEN_BEDROCK, else the standard AWS
+    Auth: a Bedrock API key in AWS_BEARER_TOKEN_BEDROCK (environment or .env), else the standard AWS
     credential chain. Bedrock has no server-side refusal fallback, so the SDK middleware is used."""
 
     name = "bedrock"
@@ -260,7 +260,11 @@ class BedrockProvider(AnthropicProvider):
         if s.bedrock_fallback_model:
             middleware.append(a.BetaRefusalFallbackMiddleware([{"model": s.bedrock_fallback_model}]))
         return a.AnthropicBedrock(
-            aws_region=region, timeout=s.llm_timeout_s, max_retries=s.llm_max_retries, middleware=middleware
+            aws_region=region,
+            api_key=s.aws_bearer_token_bedrock or None,
+            timeout=s.llm_timeout_s,
+            max_retries=s.llm_max_retries,
+            middleware=middleware,
         )
 
 
@@ -524,7 +528,8 @@ def provider_configured() -> bool:
         env = os.environ
         has_region = bool(s.aws_region or env.get("AWS_REGION") or env.get("AWS_DEFAULT_REGION"))
         has_auth = bool(
-            env.get("AWS_BEARER_TOKEN_BEDROCK")
+            s.aws_bearer_token_bedrock
+            or env.get("AWS_BEARER_TOKEN_BEDROCK")
             or env.get("AWS_ACCESS_KEY_ID")
             or env.get("AWS_PROFILE")
             or (Path.home() / ".aws" / "credentials").is_file()

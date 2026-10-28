@@ -74,9 +74,11 @@ class Settings(BaseSettings):
     llm_max_retries: int = 2
     anthropic_api_key: str | None = None
     anthropic_fallbacks: bool = True
-    # Amazon Bedrock (bedrock-runtime). Auth: AWS_BEARER_TOKEN_BEDROCK (Bedrock API key) or standard AWS
-    # credentials. LLM_MODEL must be a Bedrock model / inference-profile id, e.g. global.anthropic.claude-opus-5-5
+    # Amazon Bedrock (bedrock-runtime). Auth: AWS_BEARER_TOKEN_BEDROCK (Bedrock API key, from the environment or
+    # .env) or standard AWS credentials. LLM_MODEL must be a Bedrock model / inference-profile id, e.g.
+    # global.anthropic.claude-opus-5-5
     aws_region: str | None = None
+    aws_bearer_token_bedrock: str | None = None
     bedrock_fallback_model: str | None = "global.anthropic.claude-opus-4-8"
     openai_compat_base_url: str | None = None
     openai_compat_api_key: str | None = None

@@ -6,7 +6,7 @@ x-backend-env: &backend-env
     DATABASE_URL: postgresql+psycopg://assignmenthand:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/assignmenthand
     STORAGE_ROOT: /data/storage
     RUN_WORKER_IN_PROCESS: "false"
-    # Passed through from the host environment so the key never needs to be written to a file
+    # From the host environment, else from .env (compose reads it for ${...} too)
     AWS_BEARER_TOKEN_BEDROCK: ${AWS_BEARER_TOKEN_BEDROCK:-}
 
 services:
