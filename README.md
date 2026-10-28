@@ -44,8 +44,10 @@ API docs (OpenAPI/Swagger): http://localhost:8000/api/docs - also exported to `d
 
 ```bash
 cp .env.example .env    # set SECRET_KEY, POSTGRES_PASSWORD, AI provider settings
-docker compose up --build
+docker compose -f docker-compose.yml -f docker-compose.ports.yml up --build
 # web: http://localhost:3333   (api, worker and postgres run on the internal network)
+# On a server behind a reverse proxy (Dokploy), use docker-compose.yml alone: no port is published,
+# the proxy serves the web service (container port 3000) over HTTPS.
 ```
 
 Services: `db` (PostgreSQL 17), `api` (FastAPI; runs `alembic upgrade head` on start), `worker`

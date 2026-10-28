@@ -57,8 +57,9 @@ services:
         BACKEND_URL: http://api:8000
     environment:
       BACKEND_URL: http://api:8000
-    ports:
-      - "3333:3000" # host port 3333; inside the network the web service listens on 3000
+    # No published port: the reverse proxy (Dokploy / Traefik) serves it over HTTPS on container port
+    # 3000. Without a proxy, add docker-compose.ports.yml to reach it at http://localhost:3333.
+    expose: ["3000"]
     depends_on:
       api:
         condition: service_healthy
